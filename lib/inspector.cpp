@@ -9,17 +9,25 @@
 
 namespace inspector {
   void runRepl(std::string path, unsigned lineNumber, std::string clingContext, ...) {
-    cling::Interpreter interp(0, NULL, LLVMDIR);
+    std::cout << "stopped at " << path <<  ":" << lineNumber << std::endl;
+    const char* argv = "cling";
+    cling::Interpreter interp(1, &argv, LLVMDIR);
     interp.declare(clingContext);
     while (true) {
       std::string in;
-      std::cin >> in;
+      std::cout << "> ";
+      std::getline (std::cin, in);
+      std::cout << "process... " << std::endl;
       cling::Value value;
       auto result = interp.process(in, &value, nullptr, true);
-      std::string out;
-      llvm::raw_string_ostream outStream(out);
-      value.print(outStream);
-      std::cout << out;
+      if (result == cling::Interpreter::kSuccess) {
+        std::string out;
+        {
+          llvm::raw_string_ostream os(out);
+          value.print(os);
+        }
+        std::cout << out << std::endl;
+      }
     }
   }
 }

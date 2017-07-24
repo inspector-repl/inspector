@@ -3,5 +3,5 @@
 #include <string>
 
 int main() {
-    inspector::runRepl(std::string(__FILE__), __LINE__, "");
+  inspector::runRepl(std::string(__FILE__), __LINE__, "");
 }
