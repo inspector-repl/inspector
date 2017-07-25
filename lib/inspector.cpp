@@ -9,8 +9,8 @@
 #include <cling/Utils/Output.h>
 #include <llvm/Support/raw_ostream.h>
 
-namespace inspector {
-  void runRepl(std::string path, unsigned lineNumber, std::string clingContext, ...) {
+extern "C" {
+  void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingContext, ...) {
     std::cout << "stopped at " << path <<  ":" << lineNumber << std::endl;
     const char* argv = "cling";
     cling::Interpreter interp(1, &argv, LLVMDIR);
@@ -37,8 +37,6 @@ namespace inspector {
           value.print(os);
         }
         std::cout << out << std::endl;
-      } else {
-        std::cout << "";
       }
     }
   }

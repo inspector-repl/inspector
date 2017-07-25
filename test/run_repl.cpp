@@ -1,7 +1,7 @@
 #include "inspector.h"
 
-#include <string>
+#include <stdio.h>
 
 int main() {
-  inspector::runRepl(std::string(__FILE__), __LINE__, "");
+  inspectorRunRepl(__FILE__, __LINE__, "");
 }

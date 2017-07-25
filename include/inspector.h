@@ -2,6 +2,6 @@
 
 #include "string"
 
-namespace inspector {
-    void runRepl(std::string path, unsigned lineNumber, std::string clingContext, ...);
+extern "C" {
+  void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingContext, ...);
 }
