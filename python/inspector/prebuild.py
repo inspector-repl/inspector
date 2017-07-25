@@ -16,9 +16,17 @@ def find_inspector_macros(node):
     return locations
 
 
+INSPECTOR_REPL_PRELUDE = [
+   "#define INSIDE_CLING 1"
+   "#define INSPECTOR <cstdint>"
+   '''#include \\"{file}\\"'''
+]
+
 INSPECTOR_HEADER_TEMPLATE = """
 void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingContext, ...);
-inspectorRunRepl("{file}", {line}, "#include {file}");
+#ifndef INSIDE_CLING /* yo dawg I heard, you like repls */
+inspectorRunRepl("{file}", {line}, "{prelude}");
+#endif
 """
 
 
@@ -29,7 +37,7 @@ def write_header(location):
     header_file = os.path.join(".inspector-includes", "inspector", path)
     os.makedirs(os.path.dirname(header_file), exist_ok=True)
     with open(header_file, "w+") as f:
-        data = dict(file=file_name, line=location.line)
+        data = dict(file=file_name, line=location.line, prelude="\\n".join(INSPECTOR_REPL_PRELUDE))
         f.write(INSPECTOR_HEADER_TEMPLATE.format(**data))
 
 
