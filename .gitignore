@@ -59,3 +59,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+/test
+CMake*
+cmake*
+Makefile
+*.pyc
+.*.swp
