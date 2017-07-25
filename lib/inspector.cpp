@@ -14,16 +14,17 @@ extern "C" {
     std::cout << "stopped at " << path <<  ":" << lineNumber << std::endl;
     const char* argv = "cling";
     cling::Interpreter interp(1, &argv, LLVMDIR);
-    interp.declare(clingContext);
     cling::MetaProcessor metaProcessor(interp, cling::errs());
+
+    cling::Value value;
+    cling::Interpreter::CompilationResult result;
+    metaProcessor.process(clingContext, result, &value, /*disableValuePrinting*/ true);
 
     while (true) {
       std::string in;
       std::cout << "> ";
       std::getline (std::cin, in);
       std::cout << "process... " << std::endl;
-      cling::Value value;
-      cling::Interpreter::CompilationResult result;
       if (metaProcessor.process(in, result, &value, /*disableValuePrinting*/ true)) {
         continue;
       }
