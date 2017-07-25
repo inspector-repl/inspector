@@ -24,10 +24,9 @@ inspectorRunRepl("{file}", {line}, "#include {file}");
 
 def write_header(location):
     file_name = location.file.name
-    parts = file_name.split("/")
     # expanded form of  __FILE__ __LINE__
-    parts[-1] = "\"{}\"{}".format(parts[-1], location.line)
-    header_file = os.path.join(".inspector-includes", "inspector", *parts)
+    path = "\"{}\"{}".format(file_name, location.line)
+    header_file = os.path.join(".inspector-includes", "inspector", path)
     os.makedirs(os.path.dirname(header_file), exist_ok=True)
     with open(header_file, "w+") as f:
         data = dict(file=file_name, line=location.line)

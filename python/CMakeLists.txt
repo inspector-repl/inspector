@@ -8,13 +8,13 @@ set(BINSTUB_IN "${CMAKE_CURRENT_SOURCE_DIR}/inspector.in")
 set(BINSTUB "${CMAKE_CURRENT_BINARY_DIR}/../inspector")
 configure_file(${BINSTUB_IN} ${BINSTUB})
 
-set(LIBPATH_IN "${CMAKE_CURRENT_SOURCE_DIR}/inspector/libpath.py.in")
-set(LIBPATH "${CMAKE_CURRENT_BINARY_DIR}/build/lib/inspector/libpath.py")
-configure_file(${LIBPATH_IN} ${LIBPATH})
+set(LIBPATH_IN "${CMAKE_CURRENT_SOURCE_DIR}/inspector/config.py.in")
+set(LIBPATH "${CMAKE_CURRENT_BINARY_DIR}/build/lib/inspector/config.py")
+configure_file(${LIBPATH_IN} ${LIBPATH} @ONLY)
 
 set(SETUP_PY "${CMAKE_CURRENT_BINARY_DIR}/setup.py")
 file(GLOB_RECURSE PYTHON_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.py")
-LIST(APPEND PYTHON_FILES "setup.py.in;inspector.in;inspector/libpath.py.in")
+LIST(APPEND PYTHON_FILES "setup.py.in;inspector.in;inspector/config.py.in")
 set(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/build/timestamp")
 
 add_custom_command(OUTPUT ${OUTPUT}
@@ -24,4 +24,4 @@ add_custom_command(OUTPUT ${OUTPUT}
 
 add_custom_target(target ALL DEPENDS ${OUTPUT})
 
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install -f --prefix=${CMAKE_INSTALL_PREFIX})")
+install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install -f)")
