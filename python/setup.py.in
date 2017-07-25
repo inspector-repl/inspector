@@ -1,0 +1,7 @@
+from setuptools import setup
+
+setup(name='inspector',
+      version='${INSPECTOR_VERSION}',
+      package_dir={ '': '${CMAKE_CURRENT_SOURCE_DIR}' },
+      entry_points={"console_scripts": ["inspector=inspector:main"]},
+      packages=['inspector'])
