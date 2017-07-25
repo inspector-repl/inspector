@@ -40,4 +40,7 @@ extern "C" {
       }
     }
   }
+
+  // C++ mangled version of inspectorRunRepl
+  void _Z16inspectorRunReplPKcjS0_z(const char* path, unsigned lineNumber, const char* clingContext, ...) __attribute__((weak, alias ("inspectorRunRepl")));
 }

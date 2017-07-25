@@ -17,7 +17,7 @@ def find_inspector_macros(node):
 
 
 INSPECTOR_HEADER_TEMPLATE = """
-extern "C" void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingContext, ...);
+void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingContext, ...);
 inspectorRunRepl("{file}", {line}, "#include {file}");
 """
 
