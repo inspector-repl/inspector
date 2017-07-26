@@ -28,9 +28,9 @@ extern "C" {
 
     web::json::value body = web::json::value::parse(message);
     pplx::task<web::http::http_response> resp = client.request(web::http::methods::POST, builder.to_string(), body);
-    //return resp.get().to_string();
-    resp.get();
-    return "";
+    web::json::value response = resp.get().extract_json().get();
+    std::string result = response["result"].as_string();
+    return result;
   }
 
   std::string getJsonRequest(
