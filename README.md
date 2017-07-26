@@ -41,7 +41,7 @@ cmake --build .
 # (requires clang 5/trunk for python3 support, the clang branch from cling is new enough)
 # and libclang into path
 export PYTHONPATH=$(readlink -f <llvm-root>/src/tools/clang/bindings/python/)
-export LD_LIBRARY_PATH=$(readlink -f <llvm-root>path/to/m/lib/inst/lib)
+export LD_LIBRARY_PATH=$(readlink -f <llvm-repo>/inst/lib)
 cd build
 ./inspector prebuild ../test/test.cpp
 gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
