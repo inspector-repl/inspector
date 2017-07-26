@@ -47,4 +47,11 @@ cd build
 gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
 ```
 
-buildsystem integration coming soon...
+## TODO
+
+- [ ] buildsystem integration:
+  - [ ] cmake
+  - [ ] autotools
+  - [ ] make
+  - [ ] meson
+- include type declaration into the repl
