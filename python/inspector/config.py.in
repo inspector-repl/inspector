@@ -6,7 +6,7 @@ build_dir_prefix = os.path.realpath(os.path.join(os.path.dirname(__file__), "../
 libpath = os.path.join(build_dir_prefix,  "@CMAKE_SHARED_LIBRARY_PREFIX@")
 if os.path.exists(libpath):
     LIBRARY_PATH = libpath
-    INCLUDE_PATH = os.path.join(build_dir_prefix, "@CMAKE_INCLUDE_PATH@")
+    INCLUDE_PATH = "@INSPECTOR_INCLUDE_SOURCE_DIR@"
 else:
     LIBRARY_PATH="@CMAKE_INSTALL_PREFIX@/@CMAKE_SHARED_LIBRARY_PREFIX@"
-    INCLUDE_PATH="@CMAKE_INSTALL_PREFIX@/@CMAKE_INCLUDE_PATH@"
+    INCLUDE_PATH="@INSPECTOR_INCLUDE_DIR@"

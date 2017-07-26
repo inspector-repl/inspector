@@ -1,11 +1,9 @@
 
-from .prebuild import INSPECTOR_MACRO
-from .config import LIBRARY_PATH, INCLUDE_PATH
+from .config import LIBRARY_PATH
 
+INSPECTOR_MACRO = '-DINSPECTOR=\\<inspector/__FILE__-__LINE__\\>'
 
 def print_cflags(args):
-    data = dict(macro=INSPECTOR_MACRO,
-                library_path=LIBRARY_PATH,
-                include_path=INCLUDE_PATH)
+    data = dict(macro=INSPECTOR_MACRO, library_path=LIBRARY_PATH)
 
-    print("-I {include_path} -I .inspector-includes {macro} -Wl,-rpath,{library_path} -L{library_path} -linspector".format(**data))
+    print("-I .inspector-includes {macro} -Wl,-rpath,{library_path} -L{library_path} -linspector".format(**data))

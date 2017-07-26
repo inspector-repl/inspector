@@ -5,4 +5,4 @@ target_compile_options(inspector PUBLIC -DLLVMDIR="${LLVM_INSTALL_PREFIX}"
 
 set_target_properties(inspector PROPERTIES ENABLE_EXPORTS 1)
 
-install(TARGETS inspector RUNTIME LIBRARY DESTINATION lib)
+install(TARGETS inspector EXPORT inspectorTargets RUNTIME LIBRARY DESTINATION lib)
