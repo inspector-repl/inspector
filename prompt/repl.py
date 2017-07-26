@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import unicode_literals
+import json
 from prompt_toolkit import prompt as prompt_tk
 from prompt_toolkit.history import InMemoryHistory
 from pygments.lexers import CppLexer
@@ -23,8 +23,13 @@ class Repl():
             answer = prompt_tk(prompt, history=history, lexer=CppLexer)
             if answer == '.quit':
                 break
-            self.output.write(answer)
-            print(self.input.readline())
+            response = json.dumps(dict(input=answer),
+                                  ensure_ascii=True)
+            self.output.sendall(response.encode("utf-8"))
+            self.output.sendall(b'\0')
+            response = next(self.input)
+            evaluation_result = json.loads(response)
+            print(evaluation_result["value"])
         return _to_string(history)
 
     def _prompt_string(self):

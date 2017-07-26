@@ -1,7 +1,23 @@
+
 #!/usr/bin/env python
 
 from repl import Repl
 import socket
+import json
+
+
+def read_message(input):
+    partial_line = b""
+    while True:
+        buf = input.recv(8192)
+        if not buf: break
+        partial_line += buf
+        lines = partial_line.split(b'\0')
+        partial_line = lines.pop()
+        for line in lines:
+            yield line.decode("ascii")
+    if partial_line:
+        yield partial_line.decode("ascii")
 
 
 def main():
@@ -11,10 +27,10 @@ def main():
     s.listen()
     while True:
         conn, addr = s.accept()
-        input = conn.makefile("r", encoding="utf-8", newline="\n")
-        output = conn.makefile("w", encoding="utf-8", newline="\n")
-        file_spec = input.readline()
-        file_path, line_number = file_spec.split(":")
+        input = read_message(conn)
+        output = conn
+        file_spec = json.loads(next(input))
+        file_path, line_number = file_spec["file"], file_spec["line"]
         repl = Repl(input, output, file_path, line_number)
         repl.run_interpreter_loop()
 
