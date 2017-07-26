@@ -32,6 +32,7 @@ def main():
         file_spec = json.loads(next(input))
         file_path, line_number = file_spec["file"], file_spec["line"]
         repl = Repl(input, output, file_path, line_number)
+        repl.display_surrounding_code()
         repl.run_interpreter_loop()
 
 
