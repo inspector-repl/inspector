@@ -30,7 +30,8 @@ def _find_inspector_callsites(node, closure, in_function):
             closure.append(node)
 
     for c in node.get_children():
-        include_locations_, closures_ = _find_inspector_callsites(c, closure, in_function or node.kind == CursorKind.FUNCTION_DECL)
+        in_function = in_function or node.kind == CursorKind.FUNCTION_DECL
+        include_locations_, closures_ = _find_inspector_callsites(c, closure, in_function)
         include_locations.extend(include_locations_)
         closures.extend(closures_)
 
@@ -75,10 +76,10 @@ def write_header(location, closure):
     with open(header_file, "w+") as f:
         print(header_file)
         data = dict(file=file_name,
-                    line=location.line,
-                    declare="\\n".join(INSPECTOR_REPL_PRELUDE).format(file=file_name),
-                    prelude="\\n".join(prelude),
-                    pointerlist=", ".join(pointerlist))
+                line=location.line,
+                declare="\\n".join(INSPECTOR_REPL_PRELUDE).format(file=file_name),
+                prelude="\\n".join(prelude),
+                pointerlist=", ".join(pointerlist))
         f.write(INSPECTOR_HEADER_TEMPLATE.format(**data))
 
 
