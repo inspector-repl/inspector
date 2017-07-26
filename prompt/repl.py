@@ -20,10 +20,23 @@ class Repl():
 		while True:
 			prompt = self._prompt_string()
 			answer = prompt_tk(prompt, history=history, lexer=CppLexer)
-			print('You said: %s' % answer)
-		print('Good bye!')
+			if answer == '.quit':
+				break
+		return _to_string(history)
 
 	def _prompt_string(self):
 		prompt = '[%d] ' % self.statement_count
 		self.statement_count += 1
 		return prompt
+
+def _diplay(history):
+	print('history:', end=' ')
+	for line in history[:-1]:
+		print(line, end=' ')
+	print('', flush=True)
+
+def _to_string(history):
+	output = ''
+	for line in history[:-1]:
+		output += ' ' + line
+	return output

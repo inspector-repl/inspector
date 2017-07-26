@@ -10,8 +10,47 @@
 #include <cling/MetaProcessor/MetaProcessor.h>
 #include <cling/Utils/Output.h>
 #include <llvm/Support/raw_ostream.h>
+#include <jsoncpp/json/json.h>
+#include <cpprest/http_client.h>
+#include <cpprest/json.h>
 
 extern "C" {
+  void printJsonMessage(Json::Value message){
+    std::cout << message << std::endl;
+  }
+
+  std::string sendRequest(std::string message){
+    // Http client.
+    web::http::client::http_client client(U("http://localhost:5000"));
+
+    // URI builder.
+    web::uri_builder builder(U("/"));
+
+    web::json::value body = web::json::value::parse(message);
+    pplx::task<web::http::http_response> resp = client.request(web::http::methods::POST, builder.to_string(), body);
+    //return resp.get().to_string();
+    resp.get();
+    return "";
+  }
+
+  std::string getJsonRequest(
+        unsigned id,
+        std::string method,
+        std::string path,
+        unsigned lineNumber,
+        std::string clingContext) {
+    Json::Value request;
+    request["id"] = id;
+    request["jsonrpc"] = "2.0";
+    request["method"] = method.c_str();
+    request["params"]["path"] = path.c_str();
+    request["params"]["lineNumber"] = lineNumber;
+    request["params"]["clingContext"] = clingContext.c_str();
+
+    Json::StreamWriterBuilder wbuilder;
+    return Json::writeString(wbuilder, request);
+  }
+
   void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, ...) {
     va_list arglist;
 
@@ -25,8 +64,6 @@ extern "C" {
     vsnprintf(clingContextBuffer, bufferSize + 1, clingContext, arglist);
     va_end(arglist);
 
-    std::cout << "stopped at " << path <<  ":" << lineNumber << std::endl;
-
     const char* argv = "cling";
     cling::Interpreter interp(1, &argv, LLVMDIR);
     interp.declare(clingDeclare);
@@ -39,10 +76,9 @@ extern "C" {
     delete []clingContextBuffer;
 
     while (true) {
-      std::string in;
-      std::cout << "> ";
-      std::getline (std::cin, in);
-      std::cout << "process... " << std::endl;
+      std::string request = getJsonRequest(1, "prompt", path, lineNumber, clingContext);
+      std::string in = sendRequest(request);
+      std::cout << "processing: " << in << std::endl;
       if (metaProcessor.process(in, result, &value, /*disableValuePrinting*/ true)) {
         continue;
       }

@@ -18,7 +18,7 @@ def prompt(**kwargs):
 	(file_path, line_number, cling_context) = validate_arguments(kwargs)
 	repl = Repl(file_path, line_number, cling_context)
 	repl.display_surrounding_code()
-	repl.run_interpreter_loop()
+	return repl.run_interpreter_loop()
 
 
 def validate_arguments(kwargs):
