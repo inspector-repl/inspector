@@ -24,4 +24,4 @@ add_custom_command(OUTPUT ${OUTPUT}
 
 add_custom_target(target ALL DEPENDS ${OUTPUT})
 
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install -f)")
+install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install -f --prefix=${CMAKE_INSTALL_PREFIX})")
