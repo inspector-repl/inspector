@@ -1,35 +1,23 @@
 #!/usr/bin/env python
 
-from jsonrpcserver import methods, config
-from jsonrpcserver.exceptions import InvalidParams
 from repl import Repl
-
-class PromptServer():
-	def start(self):
-		self.config()
-		methods.serve_forever(name='', port=5000)
-
-	def config(self):
-		config.log_requests = False
-		config.log_responses = False
-
-@methods.add
-def prompt(**kwargs):
-	(file_path, line_number, cling_context) = validate_arguments(kwargs)
-	repl = Repl(file_path, line_number, cling_context)
-	repl.display_surrounding_code()
-	return repl.run_interpreter_loop()
+import socket
 
 
-def validate_arguments(kwargs):
-	kw = kwargs
+def main():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("localhost", 5000))
+    s.listen()
+    while True:
+        conn, addr = s.accept()
+        input = conn.makefile("r", encoding="utf-8", newline="\n")
+        output = conn.makefile("w", encoding="utf-8", newline="\n")
+        file_spec = input.readline()
+        file_path, line_number = file_spec.split(":")
+        repl = Repl(input, output, file_path, line_number)
+        repl.run_interpreter_loop()
 
-	check('path', kw)
-	check('lineNumber', kw)
-	check('clingContext', kw)
 
-	return (kw['path'], kw['lineNumber'], kw['clingContext'])
-
-def check(arg, kwargs):
-	if arg not in kwargs:
-		raise InvalidParams('%s is required' % arg)
+if __name__ == "__main__":
+    main()
