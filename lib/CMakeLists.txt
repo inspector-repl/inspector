@@ -1,4 +1,4 @@
-add_library(inspector SHARED inspector.cpp)
+add_library(inspector SHARED inspector.cpp PracticalSocket.cpp)
 target_link_libraries(inspector libcling jsoncpp boost_system crypto ssl cpprest)
 target_compile_options(inspector PUBLIC -DLLVMDIR="${LLVM_INSTALL_PREFIX}"
   -I${LLVM_INSTALL_PREFIX}/include)

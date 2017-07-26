@@ -86,19 +86,21 @@ class Repl():
 
     def run_interpreter_loop(self):
         history = InMemoryHistory()
+        try:
+            completer = ClangCompleter(self.file_path, self.line_number)
+        except IOError:
+            completer = None
         while True:
             prompt = self._prompt_string()
-            try:
-                completer = ClangCompleter(self.file_path, self.line_number)
-            except IOError:
-                completer = None
-
             answer = prompt_tk(prompt, history=history, lexer=CppLexer, completer=completer)
             if answer == '.quit':
                 break
             response = json.dumps(dict(input=answer), ensure_ascii=True)
             self.output.sendall(response.encode("utf-8"))
             self.output.sendall(b'\0')
+            if answer == '.quit':
+                print("Session ended.\n")
+                break
             response = next(self.input)
             evaluation_result = json.loads(response)
             print(evaluation_result["value"])
