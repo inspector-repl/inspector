@@ -60,11 +60,12 @@ class Repl():
         while True:
             prompt = self._prompt_string()
             answer = prompt_tk(prompt, history=history, lexer=CppLexer)
-            if answer == '.quit':
-                break
             response = json.dumps(dict(input=answer), ensure_ascii=True)
             self.output.sendall(response.encode("utf-8"))
             self.output.sendall(b'\0')
+            if answer == '.quit':
+                print("Session ended.\n")
+                break
             response = next(self.input)
             evaluation_result = json.loads(response)
             print(evaluation_result["value"])
