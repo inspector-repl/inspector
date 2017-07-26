@@ -3,7 +3,7 @@ import sys
 import os
 from clang.cindex import Index, TranslationUnit, CursorKind
 
-INSPECTOR_MACRO = '-DINSPECTOR=<inspector/__FILE__ __LINE__>'
+INSPECTOR_MACRO = '-DINSPECTOR=<inspector/__FILE__-__LINE__>'
 
 
 def find_inspector_macros(node):
@@ -33,7 +33,7 @@ inspectorRunRepl("{file}", {line}, "{prelude}");
 def write_header(location):
     file_name = location.file.name
     # expanded form of  __FILE__ __LINE__
-    path = "\"{}\"{}".format(file_name, location.line)
+    path = "\"{}\"-{}".format(file_name, location.line)
     header_file = os.path.join(".inspector-includes", "inspector", path)
     os.makedirs(os.path.dirname(header_file), exist_ok=True)
     with open(header_file, "w+") as f:
