@@ -41,7 +41,9 @@ extern "C" {
     while (true) {
       std::string in;
       std::cout << "> ";
-      std::getline (std::cin, in);
+      if (!std::getline (std::cin, in)) {
+        return;
+      };
       std::cout << "process... " << std::endl;
       if (metaProcessor.process(in, result, &value, /*disableValuePrinting*/ true)) {
         continue;
