@@ -75,3 +75,4 @@ gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
 - [ ] use verbose mode of compiler to get additional include paths for cling /
   [ ] libclang parsing
 - [ ] multiprocessing scanning
+- [ ] GDB/LLDB plugin: link/preload libinspector.so and invoke inspector with debug information from gdb. 
