@@ -59,7 +59,6 @@ wheels/
 .installed.cfg
 *.egg
 /test
-CMake*
 cmake*
 Makefile
 *.pyc
