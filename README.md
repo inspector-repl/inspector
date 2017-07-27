@@ -3,6 +3,9 @@ A drop-anywhere C++ REPL
 
 ![Inspector example session](https://i.imgur.com/D7MQrDU.png "Inspector")
 
+**EXPERIMENTAL** Inspector is product of 3-day hackathon at Microsoft in 2017.
+It may no work in all environments yet and have subtle bugs.
+
 ## Build
 
 ### Requirements
