@@ -20,8 +20,6 @@ class ClangCompleter(Completer):
         cmd = "clang++ -fsyntax-only -Xclang -code-completion-macros -Xclang -code-completion-at=-:%d:%d -x c++ -" % (self.line, column)
         self.content[self.line - 1] = document
         p = Popen(cmd.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        print("\n".join(self.content))
-        print(cmd)
         stdout, stderr = p.communicate("".join(self.content).encode("utf-8"))
         lines = stdout.split(b"\n")
         symbols = []
@@ -32,7 +30,8 @@ class ClangCompleter(Completer):
             symbols.append(parts[1].rstrip().decode("utf-8"))
         return symbols
     def get_completions(self, document, complete_event):
-        completions = self.run_clang(document.current_line_before_cursor)
+        text = document.current_line_before_cursor
+        completions = self.run_clang(text)
         for completion in completions:
             yield Completion(completion, start_position=0)
 
