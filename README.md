@@ -73,6 +73,8 @@ gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
 - [ ] include type declaration into the repl
 - [ ] search for '#include INSPECTOR' before parsing (speed)
 - [ ] use verbose mode of compiler to get additional include paths for cling /
-  [ ] libclang parsing
+      libclang parsing
 - [ ] multiprocessing scanning
-- [ ] GDB/LLDB plugin: link/preload libinspector.so and invoke inspector with debug information from gdb. 
+- [ ] GDB/LLDB plugin: link/preload libinspector.so and invoke inspector with debug information from gdb/lldb. 
+- Support for more languages:
+   - [ ] C
