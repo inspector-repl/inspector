@@ -12,7 +12,7 @@ A drop-anywhere C++ REPL
 - python3
 - python-prompt-toolkit (for python3)
 - python-setuptools (for python3)
-- pkgconfig
+- pkg-config
 
 ### Build Cling
 
