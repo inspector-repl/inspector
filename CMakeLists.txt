@@ -8,6 +8,9 @@ project(inspector)
 set(INSPECTOR_VERSION 0.1)
 
 find_package(Cling REQUIRED)
+find_package(PkgConfig)
+
+pkg_search_module(JSONCPP REQUIRED jsoncpp)
 
 include_directories(include)
 

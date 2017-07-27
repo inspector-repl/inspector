@@ -11,9 +11,9 @@
 #include <cling/MetaProcessor/MetaProcessor.h>
 #include <cling/Utils/Output.h>
 #include <llvm/Support/raw_ostream.h>
-#include <jsoncpp/json/json.h>
-#include <cpprest/http_client.h>
-#include <cpprest/json.h>
+#include <json/json.h>
+
+#define RCVBUFSIZE 10240
 
 #define RCVBUFSIZE 10240
 
