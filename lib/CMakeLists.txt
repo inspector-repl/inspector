@@ -1,4 +1,4 @@
-add_library(inspector SHARED inspector.cpp PracticalSocket.cpp)
+add_library(inspector SHARED socket.cpp repl.cpp prompt.cpp)
 target_link_libraries(inspector libcling ${JSONCPP_LIBRARIES})
 target_include_directories(inspector PUBLIC ${JSONCPP_INCLUDE_DIRS})
 target_compile_options(inspector PUBLIC -DLLVMDIR="${LLVM_INSTALL_PREFIX}"
