@@ -4,6 +4,16 @@ A drop-anywhere C++ REPL
 
 ## Build
 
+### Requirements
+
+- a c++ compiler (gcc or clang++)
+- libcling (see installation instructions below)
+- jsoncpp
+- python3
+- python-prompt-toolkit (for python3)
+- python-setuptools (for python3)
+- pkgconfig
+
 ### Build Cling
 
 ```
