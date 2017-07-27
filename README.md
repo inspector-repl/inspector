@@ -64,4 +64,8 @@ gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
   - [ ] autotools
   - [ ] make
   - [ ] meson
-- include type declaration into the repl
+- [ ] include type declaration into the repl
+- [ ] search for '#include INSPECTOR' before parsing (speed)
+- [ ] use verbose mode of compiler to get additional include paths for cling /
+  [ ] libclang parsing
+- [ ] multiprocessing scanning
