@@ -11,47 +11,13 @@
 #include <cling/MetaProcessor/MetaProcessor.h>
 #include <cling/Utils/Output.h>
 #include <llvm/Support/raw_ostream.h>
-#include <jsoncpp/json/json.h>
-#include <cpprest/http_client.h>
-#include <cpprest/json.h>
+#include </nix/store/595yaf66ghhcf9iij86b9lfvkj3ln0zi-jsoncpp-1.8.0/include/json/json.h>
 
 #define RCVBUFSIZE 10240
 
 extern "C" {
   void printJsonMessage(Json::Value message){
     std::cout << message << std::endl;
-  }
-
-  std::string sendRequest(std::string message){
-    // Http client.
-    web::http::client::http_client client(U("http://localhost:5000"));
-
-    // URI builder.
-    web::uri_builder builder(U("/"));
-
-    web::json::value body = web::json::value::parse(message);
-    pplx::task<web::http::http_response> resp = client.request(web::http::methods::POST, builder.to_string(), body);
-    web::json::value response = resp.get().extract_json().get();
-    std::string result = response["result"].as_string();
-    return result;
-  }
-
-  std::string getJsonRequest(
-        unsigned id,
-        std::string method,
-        std::string path,
-        unsigned lineNumber,
-        std::string clingContext) {
-    Json::Value request;
-    request["id"] = id;
-    request["jsonrpc"] = "2.0";
-    request["method"] = method.c_str();
-    request["params"]["path"] = path.c_str();
-    request["params"]["lineNumber"] = lineNumber;
-    request["params"]["clingContext"] = clingContext.c_str();
-
-    Json::StreamWriterBuilder wbuilder;
-    return Json::writeString(wbuilder, request);
   }
 
   std::string getJsonInspectorLocation(std::string filePath, unsigned lineNumber){

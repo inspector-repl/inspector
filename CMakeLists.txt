@@ -10,6 +10,7 @@ set(INSPECTOR_VERSION 0.1)
 find_package(Cling REQUIRED)
 
 include_directories(include)
+include_directories("/nix/store/595yaf66ghhcf9iij86b9lfvkj3ln0zi-jsoncpp-1.8.0/include")
 
 add_subdirectory(lib)
 
