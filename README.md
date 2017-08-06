@@ -5,7 +5,7 @@ A drop-anywhere C++ REPL
 
 [Architecture](https://dl.thalheim.io/NZkYAQMe9Rj2zirgQlJrlA/Inspector-Architecture.html)
 
-**EXPERIMENTAL** Inspector is product of 3-day hackathon at Microsoft in 2017.
+**EXPERIMENTAL** Inspector is a product of a 3-day hackathon at Microsoft in 2017.
 It may no work in all environments yet and have subtle bugs.
 
 ## Build
