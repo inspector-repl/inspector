@@ -83,7 +83,7 @@ class Repl():
         banner = self.get_code_context(self.file_path, self.line_number)
         print(banner)
 
-    def run_interpreter_loop(self):
+    def run(self):
         history = InMemoryHistory()
         try:
             completer = ClangCompleter(self.file_path, self.line_number)
@@ -103,7 +103,6 @@ class Repl():
             response = next(self.input)
             evaluation_result = json.loads(response)
             print(evaluation_result["value"])
-        return _to_string(history)
 
     def _prompt_string(self):
         prompt = '[%d] ' % self.statement_count
@@ -111,21 +110,7 @@ class Repl():
         return prompt
 
 
-def _diplay(history):
-    print('history:', end=' ')
-    for line in history[:-1]:
-        print(line, end=' ')
-    print('', flush=True)
-
-
-def _to_string(history):
-    output = ''
-    for line in history[:-1]:
-        output += ' ' + line
-    return output
-
-
 if __name__ == '__main__':
     repl = Repl("", 0, 0)
     repl.display_surrounding_code()
-    repl.run_interpreter_loop()
+    repl.run()
