@@ -61,6 +61,10 @@ export LD_LIBRARY_PATH=$(readlink -f <llvm-repo>/inst/lib)
 cd build
 ./inspector prebuild ../test/test.cpp
 gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
+# start repl cli
+./inspector repl
+# let program connect to repl
+./test-proc
 ```
 
 ## TODO
