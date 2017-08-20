@@ -50,10 +50,10 @@ INSPECTOR_REPL_PRELUDE = [
         '''#include \\"{file}\\"''',
         ]
 
-INSPECTOR_DECLARATION_TEMPLATE = """{type}& {name} = *({type}*) %p;"""
+INSPECTOR_VARIABLES_TEMPLATE = """{type}& {name} = *({type}*) %p;"""
 
 INSPECTOR_HEADER_TEMPLATE = """
-#ifndef INSIDE_CLING /* yo dawg I heard, you like repls */
+#ifndef INSIDE_CLING /* yo dawg, I heard you like repls */
 {{ // hide our variables at the moment (FIXME this can shadow outer variables)
   void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, ...);
   inspectorRunRepl("{file}", {line}, "{declare}", "{prelude}", {pointerlist});
@@ -71,7 +71,7 @@ def write_header(location, closure):
     prelude = []
     pointerlist = []
     for node in closure:
-        prelude.append(INSPECTOR_DECLARATION_TEMPLATE.format(type=node.type.spelling, name=node.spelling))
+        prelude.append(INSPECTOR_VARIABLES_TEMPLATE.format(type=node.type.spelling, name=node.spelling))
         pointerlist.append("&{variable}".format(variable=node.spelling))
     with open(header_file, "w+") as f:
         print(header_file)

@@ -4,40 +4,12 @@ import json
 from prompt_toolkit import prompt as prompt_tk
 from prompt_toolkit.history import InMemoryHistory
 import pygments
-from subprocess import Popen, PIPE
 from pygments.lexers import CppLexer
 from pygments.formatters import TerminalFormatter
 from prompt_toolkit.completion import Completer, Completion
 
-class ClangCompleter(Completer):
-    def __init__(self, file_path, line):
-        self.file_path = file_path
-        self.line = line
-        with open(self.file_path) as f:
-            self.content = f.readlines()
-    def run_clang(self, document):
-        column = len(document) + 1
-        cmd = "clang++ -fsyntax-only -Xclang -code-completion-macros -Xclang -code-completion-at=-:%d:%d -x c++ -" % (self.line, column)
-        self.content[self.line - 1] = document
-        p = Popen(cmd.split(" "), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = p.communicate("".join(self.content).encode("utf-8"))
-        lines = stdout.split(b"\n")
-        symbols = []
-        for line in lines:
-            parts = line.split(b": ")
-            if len(parts) != 3 or parts[0] != b"COMPLETION":
-                continue
-            symbols.append(parts[1].rstrip().decode("utf-8"))
-        return symbols
-    def get_completions(self, document, complete_event):
-        text = document.current_line_before_cursor
-        completions = self.run_clang(text)
-        for completion in completions:
-            yield Completion(completion, start_position=0)
-
 
 class Repl():
-
     def __init__(self, input, output, file_path, line_number):
         self.input = input
         self.output = output
@@ -91,7 +63,8 @@ class Repl():
             completer = None
         while True:
             prompt = self._prompt_string()
-            answer = prompt_tk(prompt, history=history, lexer=CppLexer, completer=completer)
+            answer = prompt_tk(
+                prompt, history=history, lexer=CppLexer, completer=completer)
             if answer == '.quit':
                 break
             response = json.dumps(dict(input=answer), ensure_ascii=True)

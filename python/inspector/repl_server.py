@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from repl import Repl
+from .repl import Repl
 import socket
 import json
 
@@ -19,7 +19,7 @@ def read_message(input):
         yield partial_line.decode("ascii")
 
 
-def main():
+def process_clients(args):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("localhost", 5000))
@@ -36,4 +36,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    process_clients()

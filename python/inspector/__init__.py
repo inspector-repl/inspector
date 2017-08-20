@@ -1,4 +1,3 @@
-
 import sys
 import argparse
 
@@ -7,18 +6,23 @@ import argparse
 
 from .prebuild import generate_header_for_file
 from .cflags import print_cflags
+from . import repl_server
 
 
 def parse_options(argv):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
 
-    parser_prebuild = subparsers.add_parser("prebuild")
-    parser_prebuild.add_argument("sourcefile")
-    parser_prebuild.set_defaults(func=generate_header_for_file)
+    prebuild_parser = subparsers.add_parser("prebuild")
+    prebuild_parser.add_argument("sourcefile")
+    prebuild_parser.set_defaults(func=generate_header_for_file)
 
-    parser_cflags = subparsers.add_parser("print-cflags")
-    parser_cflags.set_defaults(func=print_cflags)
+    cflags_parser = subparsers.add_parser("print-cflags")
+    cflags_parser.set_defaults(func=print_cflags)
+
+    repl_parser = subparsers.add_parser("repl")
+    repl_parser.set_defaults(func=repl_server.process_clients)
+
     args = parser.parse_args(argv)
 
     if 'func' not in args:
