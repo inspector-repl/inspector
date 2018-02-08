@@ -65,8 +65,6 @@ class Repl():
             prompt = self._prompt_string()
             answer = prompt_tk(
                 prompt, history=history, lexer=CppLexer, completer=completer)
-            if answer == '.quit':
-                break
             response = json.dumps(dict(input=answer), ensure_ascii=True)
             self.output.sendall(response.encode("utf-8"))
             self.output.sendall(b'\0')

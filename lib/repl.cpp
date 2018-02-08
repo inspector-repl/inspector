@@ -47,7 +47,7 @@ extern "C" {
         std::string statement = prompt.getCppStatement();
         if (statement == ".quit") {
           prompt.sendResult("");
-          break;
+          return;
         }
 
         if (metaProcessor.process(statement, result, &value, /*disableValuePrinting*/ true)) {

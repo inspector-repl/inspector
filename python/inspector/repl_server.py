@@ -9,7 +9,8 @@ def read_message(input):
     partial_line = b""
     while True:
         buf = input.recv(8192)
-        if not buf: break
+        if not buf:
+            break
         partial_line += buf
         lines = partial_line.split(b'\0')
         partial_line = lines.pop()
@@ -24,6 +25,7 @@ def process_clients(args):
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(("localhost", 5000))
     s.listen()
+    print("listen for connections")
     while True:
         conn, addr = s.accept()
         input = read_message(conn)
@@ -33,6 +35,7 @@ def process_clients(args):
         repl = Repl(input, output, file_path, line_number)
         repl.display_surrounding_code()
         repl.run()
+
 
 if __name__ == "__main__":
     process_clients()
