@@ -6,7 +6,7 @@ from prompt_toolkit.history import InMemoryHistory
 import pygments
 from pygments.lexers import CppLexer
 from pygments.formatters import TerminalFormatter
-from prompt_toolkit.completion import Completer, Completion
+from .clang_completer import ClangCompleter
 
 
 class Repl():
