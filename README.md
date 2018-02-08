@@ -3,6 +3,8 @@ A drop-anywhere C++ REPL
 
 ![Inspector example session](https://i.imgur.com/D7MQrDU.png "Inspector")
 
+[Presentation slides on Inspector](https://hackmd.shackspace.de/p/rypPYkqUM#/)
+
 [Architecture](https://dl.thalheim.io/NZkYAQMe9Rj2zirgQlJrlA/Inspector-Architecture.html)
 
 **EXPERIMENTAL** Inspector is a product of a 3-day hackathon at Microsoft in 2017.
