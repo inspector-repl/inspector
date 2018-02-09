@@ -1,5 +1,34 @@
-# Inspector
-A drop-anywhere C++ REPL
+# Inspector - A drop-anywhere C++ REPL
+
+Allows to inject a fully-functional C++17 REPL into running, compiled programs
+that can access your program state and offers features like code-completion and
+syntax highlighting.
+
+The API is similar to tools like [Pry](http://pryrepl.org/) in Ruby or
+[Pdb](https://docs.python.org/3/library/pdb.html) in Python:
+
+Example program:
+
+```c++
+// save as main.cpp
+#include <iostream>
+#include <string>
+
+int main(int argc, char** argv) {
+    int a = 1;
+    std::string b = "hello world";
+#include INSPECTOR
+    std::cout << "second break." << std::endl;
+#include INSPECTOR
+}
+```
+
+```console
+$ ./inspector prebuild main.cpp 
+$ clang++ $(./inspector print-cflags) main.cpp -o main 
+$ ./inspector repl
+$ ./main
+```
 
 ![Inspector example session](https://i.imgur.com/D7MQrDU.png "Inspector")
 
