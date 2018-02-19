@@ -62,7 +62,7 @@ git checkout cling-patches
 cd ../..
 mkdir build inst
 cd build
-cmake -DCMAKE_INSTALL_PREFIX=../inst ../src
+cmake -DCMAKE_INSTALL_PREFIX=../inst ..
 cmake --build .
 cmake --build . --target install
 ```
