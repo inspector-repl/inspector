@@ -38,6 +38,8 @@ $ ./main
 
 [10 min presentation on Inspector](https://www.youtube.com/watch?v=Cl5RSlW6xAc)
 
+[Cppcast about Inspector](http://cppcast.com/2018/02/mathieu-ropert/)
+
 ## Build
 
 ### Requirements
