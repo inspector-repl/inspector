@@ -1,5 +1,7 @@
 # Inspector - A drop-anywhere C++ REPL
 
+[![Build Status](https://travis-ci.org/inspector-repl/inspector.svg?branch=master)](https://travis-ci.org/inspector-repl/inspector)
+
 Allows to inject a fully-functional C++17 REPL into running, compiled programs
 that can access your program state and offers features like code-completion and
 syntax highlighting.
@@ -49,6 +51,8 @@ $ ./main
 - pkg-config
 
 ### Build Cling
+
+Note that for some linux distributions the cling project also provide pre-build [binaries](https://root.cern.ch/download/cling/).
 
 ```
 git clone http://root.cern.ch/git/llvm.git src
