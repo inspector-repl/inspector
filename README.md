@@ -36,7 +36,7 @@ $ ./main
 
 [Presentation slides on Inspector](https://hackmd.shackspace.de/p/rypPYkqUM#/)
 
-[10 min presentation on Inspector](https://www.youtube.com/watch?v=Cl5RSlW6xAc)
+[10 min video presentation on Inspector](https://www.youtube.com/watch?v=Cl5RSlW6xAc)
 
 [Cppcast about Inspector](http://cppcast.com/2018/02/mathieu-ropert/)
 
