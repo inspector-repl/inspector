@@ -1,0 +1,6 @@
+language: c
+sudo: required
+services:
+  - docker
+script:
+  - docker run -v$PWD:/w -it fedora:27 /bin/sh -c "cd w && ./ci.sh"
