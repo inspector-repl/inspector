@@ -35,7 +35,7 @@ class ClangCompleter(Completer):
     def get_completions(self, document, complete_event):
         text = document.current_line_before_cursor
         completions = self.run_clang(text)
-        match = next(self.insertion_pattern.finditer(text))
+        match = next(self.insertion_pattern.finditer(text), None)
         if match is not None:
             offset = match.start() + 1 - len(text)
         else:
