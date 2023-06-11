@@ -1,3 +1,4 @@
+#include "inspector/common.h"
 #include "inspector/socket.h"
 
 #include <cling/Utils/Output.h>

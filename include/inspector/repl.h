@@ -1,5 +1,7 @@
 #pragma once
 
+#include "inspector/common.h"
+
 #include "string"
 
 extern "C" {
