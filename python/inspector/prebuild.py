@@ -120,6 +120,7 @@ def generate_header_for_file(args):
         parser.error("unable to load input")
 
     callsites = find_inspector_callsites(tu.cursor)
+    print("Writing include files to:")
     for (location, closure) in callsites:
         write_header(location, closure)
 
