@@ -1,3 +1,8 @@
+
+# Exception specifications are removed in C++17
+# To override back on:
+  # add_compile_definitions(USE_EXCEPTION_SPECIFICATIONS)
+
 add_library(inspector SHARED socket.cpp repl.cpp prompt.cpp)
 target_link_libraries(inspector libcling ${JSONCPP_LIBRARIES})
 target_include_directories(inspector PUBLIC ${JSONCPP_INCLUDE_DIRS})
