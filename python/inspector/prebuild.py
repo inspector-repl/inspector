@@ -65,8 +65,15 @@ INSPECTOR_VARIABLES_TEMPLATE = """{type}& {name} = *({type}*) %p;"""
 
 INSPECTOR_HEADER_TEMPLATE = """
 #ifndef INSIDE_CLING /* yo dawg, I heard you like repls */
-void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, ...);
-inspectorRunRepl("{file}", {line}, "{declare}", "{prelude}", {pointerlist});
+
+    void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, ...);
+    inspectorRunRepl(
+        /* file         */ "{file}",     
+        /* line         */  {line},      
+        /* declare      */ "{declare}",  
+        /* prelude      */ "{prelude}",  
+        /* pointerlist  */  {pointerlist}
+    );
 #endif
 """
 
@@ -113,6 +120,7 @@ def generate_header_for_file(args):
         parser.error("unable to load input")
 
     callsites = find_inspector_callsites(tu.cursor)
+    print("Writing include files to:")
     for (location, closure) in callsites:
         write_header(location, closure)
 

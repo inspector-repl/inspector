@@ -3,6 +3,7 @@
 import json
 from prompt_toolkit import prompt as prompt_tk
 from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.lexers import PygmentsLexer
 import pygments
 from pygments.lexers import CppLexer
 from pygments.formatters import TerminalFormatter
@@ -64,7 +65,7 @@ class Repl():
         while True:
             prompt = self._prompt_string()
             answer = prompt_tk(
-                prompt, history=history, lexer=CppLexer, completer=completer)
+                prompt, history=history, lexer=PygmentsLexer(CppLexer), completer=completer)
             response = json.dumps(dict(input=answer), ensure_ascii=True)
             self.output.sendall(response.encode("utf-8"))
             self.output.sendall(b'\0')
