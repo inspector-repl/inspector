@@ -40,11 +40,14 @@ class ClangCompleter(Completer):
     def get_completions(self, document, complete_event):
         text = document.current_line_before_cursor
         completions = self.run_clang(text)
-        match = next(self.insertion_pattern.finditer(text), None)
+        match = None
+        for m in self.insertion_pattern.finditer(text):
+            match = m
         if match is not None:
-            offset = match.start() + 1 - len(text)
+            prefix_start = match.start() + 1
+            prefix_length = len(text) - prefix_start
+            offset = -prefix_length
         else:
-            offset = 0
+            offset = -len(text)
         for completion in completions:
-            # XXX start_position needs to be computed relative to the correct completion point
             yield Completion(completion, start_position=offset)
