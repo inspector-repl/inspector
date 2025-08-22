@@ -71,8 +71,13 @@ class Repl:
                 completer=completer,
             )
             response = json.dumps(dict(input=answer), ensure_ascii=True)
-            self.output.sendall(response.encode("utf-8"))
-            self.output.sendall(b"\0")
+            try:
+                self.output.sendall(response.encode("utf-8"))
+                self.output.sendall(b"\0")
+            except BrokenPipeError:
+                # Client disconnected, exit gracefully
+                print("Client disconnected.\n")
+                break
             if answer == ".quit":
                 print("Session ended.\n")
                 break
