@@ -1,6 +1,11 @@
 {
   description = "Inspector - C++ REPL integration";
 
+  nixConfig.extra-substituters = [ "https://cache.thalheim.io" ];
+  nixConfig.extra-trusted-public-keys = [
+    "cache.thalheim.io-1:R7msbosLEZKrxk/lKxf9BTjOOH7Ax3H0Qj0/6wiHOgc="
+  ];
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
@@ -25,11 +30,8 @@
 
       perSystem =
         {
-          config,
           self',
-          inputs',
           pkgs,
-          system,
           ...
         }:
         let
