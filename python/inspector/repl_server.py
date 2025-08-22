@@ -37,21 +37,22 @@ def process_clients(args):
 
     # Create Unix socket
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.bind(str(socket_path))
-    s.listen()
-    print(f"Listening on Unix socket: {socket_path}")
+    with s:
+        s.bind(str(socket_path))
+        s.listen()
+        print(f"Listening on Unix socket: {socket_path}")
 
-    try:
-        while True:
-            conn, addr = s.accept()
-            input = read_message(conn)
-            output = conn
-            file_spec = json.loads(next(input))
-            file_path, line_number = file_spec["file"], file_spec["line"]
-            repl = Repl(input, output, file_path, line_number)
-            repl.display_surrounding_code()
-            repl.run()
-    finally:
-        # Clean up socket on exit
-        if socket_path.exists():
-            socket_path.unlink()
+        try:
+            while True:
+                conn, _addr = s.accept()
+                with conn:
+                    input_msg = read_message(conn)
+                    file_spec = json.loads(next(input_msg))
+                    file_path, line_number = file_spec["file"], file_spec["line"]
+                    repl = Repl(input_msg, conn, file_path, line_number)
+                    repl.display_surrounding_code()
+                    repl.run()
+        finally:
+            # Clean up socket on exit
+            if socket_path.exists():
+                socket_path.unlink()
