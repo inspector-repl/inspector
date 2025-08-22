@@ -1,0 +1,126 @@
+{
+  description = "Inspector - C++ REPL integration";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [
+        inputs.treefmt-nix.flakeModule
+      ];
+
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
+
+      perSystem = { config, self', inputs', pkgs, system, ... }:
+        let
+          # Use LLVM 20 stdenv for consistency
+          llvmPackages = pkgs.llvmPackages_git;
+          stdenv = llvmPackages.stdenv;
+
+          # Build LLVM with static libraries
+          llvm = llvmPackages.llvm;
+
+          pythonEnv = pkgs.python3.withPackages (ps: with ps; [
+            prompt-toolkit
+            pygments
+            setuptools
+            libclang
+          ]);
+
+          inspector = stdenv.mkDerivation rec {
+            pname = "inspector";
+            version = "0.1";
+
+            src = ./.;
+
+            nativeBuildInputs = with pkgs; [
+              cmake
+              ninja
+              pkg-config
+              pythonEnv
+            ];
+
+            buildInputs = with pkgs; [
+              jsoncpp
+              llvmPackages.clang-unwrapped.dev
+              llvmPackages.clang-unwrapped.lib
+              llvm.dev
+            ];
+
+            cmakeFlags = [
+              "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
+              "-GNinja"
+            ];
+
+            postInstall = ''
+              # Install Python package
+              cd python
+              ${pythonEnv}/bin/python setup.py install --prefix=$out
+            '';
+          };
+        in
+        {
+          packages.default = inspector;
+
+          devShells.default = llvmPackages.stdenv.mkDerivation {
+            name = "inspector-dev-shell";
+            buildInputs = with pkgs; [
+              # Build tools
+              cmake
+              ninja
+              pkg-config
+
+              # C++ dependencies
+              jsoncpp
+              zlib
+              llvmPackages.clang-unwrapped.dev
+              llvmPackages.clang-unwrapped.lib
+              llvmPackages.clang
+              llvm.dev
+
+              # Python environment
+              pythonEnv
+
+              # Development tools
+              gdb
+              (lib.hiPrio pkgs.buildPackages.clang-tools)
+            ];
+
+            cmakeFlags = [
+              "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
+            ];
+
+            shellHook = ''
+              echo "Inspector development environment"
+              echo "Available tools:"
+              echo "  - cmake: Build system"
+              echo "  - clang-repl: C++ interpreter (LLVM 19)"
+              echo "  - python: With prompt-toolkit and pygments"
+              echo "  - nix fmt: Format code"
+              echo ""
+              echo "To build:"
+              echo "  mkdir -p build && cd build"
+              echo "  cmake -GNinja .."
+              echo "  make"
+            '';
+          };
+
+          treefmt = {
+            projectRootFile = "flake.nix";
+            programs = {
+              nixpkgs-fmt.enable = true;
+              clang-format.enable = true;
+              cmake-format.enable = true;
+              ruff.enable = true;
+              shellcheck.enable = true;
+            };
+          };
+        };
+    };
+}

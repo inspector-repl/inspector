@@ -6,5 +6,6 @@ int globalVar = 5;
 
 int main() {
   std::string s = "local string";
-  inspectorRunRepl(__FILE__, __LINE__, "", "");
+  static const char* includes[] = { nullptr };
+  inspectorRunRepl(__FILE__, __LINE__, "", "", includes);
 }

@@ -45,50 +45,52 @@ $ ./main
 ### Requirements
 
 - a c++ compiler (gcc or clang++)
-- libcling (see installation instructions below)
+- LLVM/Clang 19+ with clang-repl
 - jsoncpp
 - python3
 - python-prompt-toolkit (for python3)
 - python-setuptools (for python3)
 - pkg-config
+- ninja (build system)
 
-### Build Cling
+### Using Nix
 
-Note that for some linux distributions the cling project also provide pre-build [binaries](https://root.cern.ch/download/cling/).
+The easiest way to get all dependencies is using the Nix flake:
 
+```bash
+nix develop
 ```
-git clone http://root.cern.ch/git/llvm.git src
-cd src
-git checkout cling-patches
-cd tools
-git clone http://root.cern.ch/git/cling.git
-git clone http://root.cern.ch/git/clang.git
-cd clang
-git checkout cling-patches
-cd ../..
-mkdir build inst
-cd build
-cmake -DCMAKE_INSTALL_PREFIX=../inst ..
-cmake --build .
-cmake --build . --target install
+
+### Manual Installation
+
+You need LLVM/Clang 19 or later with clang-repl support. Most modern distributions include this in their LLVM packages.
+
+On macOS with Homebrew:
+```bash
+brew install llvm@19 ninja jsoncpp
+```
+
+On Ubuntu/Debian:
+```bash
+apt install llvm-19-dev clang-19 libjsoncpp-dev ninja-build
 ```
 
 ### Build Inspector
 
-```
+```bash
 git clone git@github.com:inspector-repl/inspector.git
 cd inspector
 mkdir build
 cd build
-cmake -DCMAKE_PREFIX_PATH="../inst" ..
-cmake --build .
+cmake -GNinja ..
+ninja
 ```
 
 ## Usage
 
 ```
 # bring python bindings
-# (requires clang 5/trunk for python3 support, the clang branch from cling is new enough)
+# (requires clang with clang-repl support, LLVM 19+ recommended)
 # and libclang into path
 export PYTHONPATH=$(readlink -f <llvm-root>/src/tools/clang/bindings/python/)
 export LD_LIBRARY_PATH=$(readlink -f <llvm-repo>/inst/lib)
@@ -110,7 +112,7 @@ gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
   - [ ] meson
 - [ ] include type declaration into the repl
 - [ ] search for '#include INSPECTOR' before parsing (speed)
-- [ ] use verbose mode of compiler to get additional include paths for cling /
+- [ ] use verbose mode of compiler to get additional include paths for clang-repl /
       libclang parsing
 - [ ] multiprocessing scanning
 - [ ] GDB/LLDB plugin: link/preload libinspector.so and invoke inspector with debug information from gdb/lldb. 

@@ -65,20 +65,27 @@ INSPECTOR_VARIABLES_TEMPLATE = """{type}& {name} = *({type}*) %p;"""
 
 INSPECTOR_HEADER_TEMPLATE = """
 #ifndef INSIDE_CLING /* yo dawg, I heard you like repls */
-
-    void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, ...);
+{{
+    static const char* __inspector_includes[] = {{
+        {includes},
+        NULL
+    }};
+    
+    void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, const char* const* clingIncludes, ...);
     inspectorRunRepl(
         /* file         */ "{file}",     
         /* line         */  {line},      
         /* declare      */ "{declare}",  
-        /* prelude      */ "{prelude}",  
+        /* prelude      */ "{prelude}",
+        /* includes     */ __inspector_includes,
         /* pointerlist  */  {pointerlist}
     );
+}}
 #endif
 """
 
 
-def write_header(location, closure):
+def write_header(location, closure, include_paths):
     file_name = location.file.name
     # expanded form of  __FILE__ __LINE__
     path = "\"{}\"-{}".format(file_name, location.line)
@@ -98,16 +105,45 @@ def write_header(location, closure):
             line=location.line,
             declare="\\n".join(INSPECTOR_REPL_PRELUDE).format(file=file_name),
             prelude="\\n".join(prelude),
+            includes=",\n        ".join([f'"{flag}"' for flag in include_paths]) if include_paths else "",
             pointerlist=", ".join(pointerlist))
         f.write(INSPECTOR_HEADER_TEMPLATE.format(**data))
 
 
 def generate_header_for_file(args):
+    import subprocess
     index = Index.create()
     cflags = [
+        "-std=c++17",  # Need C++ support to parse std::string etc
         "-I{include}".format(include=INCLUDE_PATH),
         "-DINSPECTOR=<inspector/dummy.h>"
     ]
+    
+    # Try to get C++ include paths from the compiler
+    # Use CXX if set, otherwise CC, otherwise default to clang++
+    compiler = os.getenv("CXX", os.getenv("CC", "clang++"))
+    try:
+        result = subprocess.run(
+            [compiler, "-E", "-x", "c++", "-", "-v"],
+            stdin=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False
+        )
+        if result.stderr:
+            in_search = False
+            for line in result.stderr.split('\n'):
+                if '#include <...> search starts here:' in line:
+                    in_search = True
+                elif 'End of search list.' in line:
+                    in_search = False
+                elif in_search and line.strip():
+                    include_path = line.strip()
+                    if os.path.isdir(include_path):
+                        cflags.append(f"-I{include_path}")
+    except Exception:
+        pass  # If we can't get the paths, continue with existing flags
+    
     for flag in os.getenv("NIX_CFLAGS_COMPILE", "").split(" "):
         if len(flag) > 0:
             cflags.append(flag)
@@ -119,10 +155,16 @@ def generate_header_for_file(args):
     if not tu:
         parser.error("unable to load input")
 
+    # Collect include paths that were successfully used (keep the full -I flag)
+    include_paths = []
+    for flag in cflags:
+        if flag.startswith("-I"):
+            include_paths.append(flag)
+    
     callsites = find_inspector_callsites(tu.cursor)
     print("Writing include files to:")
     for (location, closure) in callsites:
-        write_header(location, closure)
+        write_header(location, closure, include_paths)
 
 
 if __name__ == '__main__':
