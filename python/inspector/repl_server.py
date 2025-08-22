@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
 from .repl import Repl
+from .socket_path import get_socket_directory
 import socket
 import json
-import os
-from pathlib import Path
 
 
 def read_message(input):
@@ -23,13 +22,10 @@ def read_message(input):
 
 
 def process_clients(args):
-    # Get XDG_RUNTIME_DIR
-    xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
-    if not xdg_runtime_dir:
-        raise RuntimeError("XDG_RUNTIME_DIR not set")
+    # Get platform-specific socket directory
+    socket_dir = get_socket_directory()
 
     # Create socket directory if it doesn't exist
-    socket_dir = Path(xdg_runtime_dir) / "inspector"
     socket_dir.mkdir(parents=True, exist_ok=True)
 
     # Socket path
@@ -59,7 +55,3 @@ def process_clients(args):
         # Clean up socket on exit
         if socket_path.exists():
             socket_path.unlink()
-
-
-if __name__ == "__main__":
-    process_clients()

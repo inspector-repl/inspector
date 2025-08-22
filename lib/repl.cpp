@@ -1,6 +1,7 @@
 #include "inspector/repl.h"
 #include "inspector/prompt.h"
 #include "inspector/socket.h"
+#include "inspector/socket_path.h"
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Interpreter/Interpreter.h>
@@ -28,16 +29,16 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
                                  const char *clingContextFormatted,
                                  const char *const *clingIncludes) {
   try {
-    // Get XDG_RUNTIME_DIR environment variable
-    const char *xdgRuntimeDir = std::getenv("XDG_RUNTIME_DIR");
-    if (!xdgRuntimeDir) {
-      cerr << "XDG_RUNTIME_DIR not set" << endl;
-      exit(1);
+    // Get platform-specific socket directory
+    std::filesystem::path socketDir = getSocketDirectory();
+
+    // Create socket directory if it doesn't exist
+    if (!std::filesystem::exists(socketDir)) {
+      std::filesystem::create_directories(socketDir);
     }
 
-    // Construct socket path using filesystem
-    std::filesystem::path socketPath =
-        std::filesystem::path(xdgRuntimeDir) / "inspector" / "sock";
+    // Construct socket path
+    std::filesystem::path socketPath = socketDir / "sock";
 
     // Open Unix socket connection first so we can report any errors
     UnixSocket socket(socketPath);
@@ -63,11 +64,9 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
       for (const char *const *includePtr = clingIncludes;
            *includePtr != nullptr; ++includePtr) {
         Args.push_back(*includePtr);
-        std::cerr << "[DEBUG] Adding arg: " << *includePtr << "\n";
       }
     }
 
-    std::cerr << "[DEBUG] Total args: " << Args.size() << "\n";
     CB.SetCompilerArgs(Args);
 
     // Create the CompilerInstance
@@ -81,10 +80,6 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
 
     // Load any required plugins (like clang-repl does)
     (*CIOrErr)->LoadRequestedPlugins();
-
-    // Debug: Check if we have proper action support
-    std::cerr
-        << "[DEBUG] CompilerInstance created, about to create Interpreter\n";
 
     // Install error handler
     llvm::install_fatal_error_handler(
@@ -151,6 +146,7 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
 
   } catch (SocketException &e) {
     cerr << e.what() << endl;
+    cerr << "Socket path: " << getSocketDirectory() / "sock" << endl;
     exit(1);
   }
 }

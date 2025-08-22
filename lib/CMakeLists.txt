@@ -1,6 +1,7 @@
 # Source files
 set(SOURCES
   socket.cpp
+  socket_path.cpp
   repl.cpp
   prompt.cpp
 )
