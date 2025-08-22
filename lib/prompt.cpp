@@ -10,7 +10,7 @@
 
 using namespace inspector;
 
-Prompt::Prompt(TCPSocket &socket_) : socket(socket_) {};
+Prompt::Prompt(UnixSocket &socket_) : socket(socket_) {};
 
 string Prompt::getJsonInspectorLocation(std::string filePath,
                                         unsigned lineNumber) {

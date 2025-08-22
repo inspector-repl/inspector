@@ -14,6 +14,8 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -26,8 +28,19 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
                                  const char *clingContextFormatted,
                                  const char *const *clingIncludes) {
   try {
-    // Open socket connection first so we can report any errors
-    TCPSocket socket("localhost", 5000);
+    // Get XDG_RUNTIME_DIR environment variable
+    const char *xdgRuntimeDir = std::getenv("XDG_RUNTIME_DIR");
+    if (!xdgRuntimeDir) {
+      cerr << "XDG_RUNTIME_DIR not set" << endl;
+      exit(1);
+    }
+
+    // Construct socket path using filesystem
+    std::filesystem::path socketPath =
+        std::filesystem::path(xdgRuntimeDir) / "inspector" / "sock";
+
+    // Open Unix socket connection first so we can report any errors
+    UnixSocket socket(socketPath);
     Prompt prompt(socket);
     prompt.sendInspectorLocation(path, lineNumber);
 
