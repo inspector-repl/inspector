@@ -107,48 +107,52 @@
             in
             packages // devShells;
 
-          devShells.default = llvmPackages.stdenv.mkDerivation {
-            name = "inspector-dev-shell";
-            buildInputs = with pkgs; [
-              # Build tools
-              cmake
-              ninja
-              pkg-config
+          devShells.default =
+            (pkgs.mkShell.override {
+              stdenv = llvmPackages.stdenv;
+            })
+              {
+                buildInputs = with pkgs; [
+                  # C++ dependencies
+                  jsoncpp
+                  zlib
+                  llvmPackages.clang-unwrapped.dev
+                  llvmPackages.clang-unwrapped.lib
+                  llvmPackages.clang
+                  llvmPackages.lldb
+                  llvm.dev
 
-              # C++ dependencies
-              jsoncpp
-              zlib
-              llvmPackages.clang-unwrapped.dev
-              llvmPackages.clang-unwrapped.lib
-              llvmPackages.clang
-              llvmPackages.lldb
-              llvm.dev
+                  # Python environment
+                  pythonEnv
+                ];
+                nativeBuildInputs = with pkgs; [
+                  # Build tools
+                  cmake
+                  ninja
+                  pkg-config
 
-              # Python environment
-              pythonEnv
+                  # Development tools
+                  (lib.hiPrio pkgs.buildPackages.clang-tools)
+                ];
 
-              # Development tools
-              (lib.hiPrio pkgs.buildPackages.clang-tools)
-            ];
+                cmakeFlags = [
+                  "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
+                ];
 
-            cmakeFlags = [
-              "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
-            ];
-
-            shellHook = ''
-              echo "Inspector development environment"
-              echo "Available tools:"
-              echo "  - cmake: Build system"
-              echo "  - clang-repl: C++ interpreter (LLVM 19)"
-              echo "  - python: With prompt-toolkit and pygments"
-              echo "  - nix fmt: Format code"
-              echo ""
-              echo "To build:"
-              echo "  mkdir -p build && cd build"
-              echo "  cmake -GNinja .."
-              echo "  make"
-            '';
-          };
+                shellHook = ''
+                  echo "Inspector development environment"
+                  echo "Available tools:"
+                  echo "  - cmake: Build system"
+                  echo "  - clang-repl: C++ interpreter (LLVM 19)"
+                  echo "  - python: With prompt-toolkit and pygments"
+                  echo "  - nix fmt: Format code"
+                  echo ""
+                  echo "To build:"
+                  echo "  mkdir -p build && cd build"
+                  echo "  cmake -GNinja .."
+                  echo "  make"
+                '';
+              };
 
           treefmt = {
             projectRootFile = "flake.nix";
