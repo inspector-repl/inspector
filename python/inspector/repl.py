@@ -10,7 +10,7 @@ from pygments.formatters import TerminalFormatter
 from .clang_completer import ClangCompleter
 
 
-class Repl():
+class Repl:
     def __init__(self, input, output, file_path, line_number):
         self.input = input
         self.output = output
@@ -65,11 +65,15 @@ class Repl():
         while True:
             prompt = self._prompt_string()
             answer = prompt_tk(
-                prompt, history=history, lexer=PygmentsLexer(CppLexer), completer=completer)
+                prompt,
+                history=history,
+                lexer=PygmentsLexer(CppLexer),
+                completer=completer,
+            )
             response = json.dumps(dict(input=answer), ensure_ascii=True)
             self.output.sendall(response.encode("utf-8"))
-            self.output.sendall(b'\0')
-            if answer == '.quit':
+            self.output.sendall(b"\0")
+            if answer == ".quit":
                 print("Session ended.\n")
                 break
             response = next(self.input)
@@ -77,12 +81,12 @@ class Repl():
             print(evaluation_result["value"])
 
     def _prompt_string(self):
-        prompt = '[%d] ' % self.statement_count
+        prompt = "[%d] " % self.statement_count
         self.statement_count += 1
         return prompt
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     repl = Repl("", 0, 0)
     repl.display_surrounding_code()
     repl.run()

@@ -1,15 +1,14 @@
 #!/usr/bin/env python
-import sys
 import os
-from clang.cindex import Index, TranslationUnit, CursorKind, TypeKind
+from clang.cindex import Index, TranslationUnit, CursorKind
 from .config import INCLUDE_PATH
 
 
 def _escape_c_string(string):
-    result = ''
+    result = ""
     for c in string:
-        if not (32 <= ord(c) < 127) or c == '\\' or c == '"':
-            result += '\\%03o' % ord(c)
+        if not (32 <= ord(c) < 127) or c == "\\" or c == '"':
+            result += "\\%03o" % ord(c)
         else:
             result += c
     return '"' + result + '"'
@@ -28,13 +27,14 @@ def _find_inspector_callsites(node, closure, in_function):
     # reset closure outside of functions
     if not in_function:
         closure = []
-    if node.kind == CursorKind.MACRO_INSTANTIATION and \
-            node.spelling == "INSPECTOR":
+    if node.kind == CursorKind.MACRO_INSTANTIATION and node.spelling == "INSPECTOR":
         include_locations.append(node.location)
     elif in_function:
-        if node.kind == CursorKind.COMPOUND_STMT and \
-                node.location is not None and \
-                node.location.file.name.endswith("inspector/dummy.h"):
+        if (
+            node.kind == CursorKind.COMPOUND_STMT
+            and node.location is not None
+            and node.location.file.name.endswith("inspector/dummy.h")
+        ):
             closures.append(closure)
         elif node.kind == CursorKind.VAR_DECL or node.kind == CursorKind.PARM_DECL:
             closure.append(node)
@@ -42,7 +42,8 @@ def _find_inspector_callsites(node, closure, in_function):
     for c in node.get_children():
         in_function = in_function or node.kind == CursorKind.FUNCTION_DECL
         include_locations_, closures_ = _find_inspector_callsites(
-            c, closure, in_function)
+            c, closure, in_function
+        )
         include_locations.extend(include_locations_)
         closures.extend(closures_)
 
@@ -88,7 +89,7 @@ INSPECTOR_HEADER_TEMPLATE = """
 def write_header(location, closure, include_paths):
     file_name = location.file.name
     # expanded form of  __FILE__ __LINE__
-    path = "\"{}\"-{}".format(file_name, location.line)
+    path = '"{}"-{}'.format(file_name, location.line)
     header_file = os.path.join(".inspector-includes", "inspector", path)
     os.makedirs(os.path.dirname(header_file), exist_ok=True)
     prelude = []
@@ -96,7 +97,9 @@ def write_header(location, closure, include_paths):
     for node in closure:
         prelude.append(
             INSPECTOR_VARIABLES_TEMPLATE.format(
-                type=node.type.spelling, name=node.spelling))
+                type=node.type.spelling, name=node.spelling
+            )
+        )
         pointerlist.append("&{variable}".format(variable=node.spelling))
     with open(header_file, "w+") as f:
         print(header_file)
@@ -105,20 +108,24 @@ def write_header(location, closure, include_paths):
             line=location.line,
             declare="\\n".join(INSPECTOR_REPL_PRELUDE).format(file=file_name),
             prelude="\\n".join(prelude),
-            includes=",\n        ".join([f'"{flag}"' for flag in include_paths]) if include_paths else "",
-            pointerlist=", ".join(pointerlist))
+            includes=",\n        ".join([f'"{flag}"' for flag in include_paths])
+            if include_paths
+            else "",
+            pointerlist=", ".join(pointerlist),
+        )
         f.write(INSPECTOR_HEADER_TEMPLATE.format(**data))
 
 
 def generate_header_for_file(args):
     import subprocess
+
     index = Index.create()
     cflags = [
         "-std=c++17",  # Need C++ support to parse std::string etc
         "-I{include}".format(include=INCLUDE_PATH),
-        "-DINSPECTOR=<inspector/dummy.h>"
+        "-DINSPECTOR=<inspector/dummy.h>",
     ]
-    
+
     # Try to get C++ include paths from the compiler
     # Use CXX if set, otherwise CC, otherwise default to clang++
     compiler = os.getenv("CXX", os.getenv("CC", "clang++"))
@@ -128,14 +135,14 @@ def generate_header_for_file(args):
             stdin=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
-            check=False
+            check=False,
         )
         if result.stderr:
             in_search = False
-            for line in result.stderr.split('\n'):
-                if '#include <...> search starts here:' in line:
+            for line in result.stderr.split("\n"):
+                if "#include <...> search starts here:" in line:
                     in_search = True
-                elif 'End of search list.' in line:
+                elif "End of search list." in line:
                     in_search = False
                 elif in_search and line.strip():
                     include_path = line.strip()
@@ -143,7 +150,7 @@ def generate_header_for_file(args):
                         cflags.append(f"-I{include_path}")
     except Exception:
         pass  # If we can't get the paths, continue with existing flags
-    
+
     for flag in os.getenv("NIX_CFLAGS_COMPILE", "").split(" "):
         if len(flag) > 0:
             cflags.append(flag)
@@ -151,7 +158,8 @@ def generate_header_for_file(args):
     tu = index.parse(
         args.sourcefile,
         cflags,
-        options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+        options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
+    )
     if not tu:
         parser.error("unable to load input")
 
@@ -160,12 +168,12 @@ def generate_header_for_file(args):
     for flag in cflags:
         if flag.startswith("-I"):
             include_paths.append(flag)
-    
+
     callsites = find_inspector_callsites(tu.cursor)
     print("Writing include files to:")
-    for (location, closure) in callsites:
+    for location, closure in callsites:
         write_header(location, closure, include_paths)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

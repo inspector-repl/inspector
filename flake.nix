@@ -9,15 +9,29 @@
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = inputs@{ flake-parts, ... }:
+  outputs =
+    inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.treefmt-nix.flakeModule
       ];
 
-      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
 
-      perSystem = { config, self', inputs', pkgs, system, ... }:
+      perSystem =
+        {
+          config,
+          self',
+          inputs',
+          pkgs,
+          system,
+          ...
+        }:
         let
           # Use LLVM 20 stdenv for consistency
           llvmPackages = pkgs.llvmPackages_git;
@@ -26,12 +40,14 @@
           # Build LLVM with static libraries
           llvm = llvmPackages.llvm;
 
-          pythonEnv = pkgs.python3.withPackages (ps: with ps; [
-            prompt-toolkit
-            pygments
-            setuptools
-            libclang
-          ]);
+          pythonEnv = pkgs.python3.withPackages (
+            ps: with ps; [
+              prompt-toolkit
+              pygments
+              setuptools
+              libclang
+            ]
+          );
 
           inspector = stdenv.mkDerivation rec {
             pname = "inspector";
@@ -114,10 +130,11 @@
           treefmt = {
             projectRootFile = "flake.nix";
             programs = {
-              nixpkgs-fmt.enable = true;
+              nixfmt.enable = true;
               clang-format.enable = true;
               cmake-format.enable = true;
-              ruff.enable = true;
+              ruff-check.enable = true;
+              ruff-format.enable = true;
               shellcheck.enable = true;
             };
           };

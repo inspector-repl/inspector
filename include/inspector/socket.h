@@ -2,8 +2,8 @@
 
 #include "inspector/common.h"
 
-#include <string>            // For string
-#include <exception>         // For exception class
+#include <exception> // For exception class
+#include <string>    // For string
 
 using namespace std;
 
@@ -32,7 +32,7 @@ public:
   const char *what() const noexcept;
 
 private:
-  string userMessage;  // Exception message
+  string userMessage; // Exception message
 };
 
 /**
@@ -69,14 +69,15 @@ public:
 
   /**
    *   Set the local port to the specified port and the local address
-   *   to the specified address.  If you omit the port, a random port 
+   *   to the specified address.  If you omit the port, a random port
    *   will be selected.
    *   @param localAddress local address
    *   @param localPort local port
    *   @exception SocketException thrown if setting local port or address fails
    */
-  void setLocalAddressAndPort(const string &localAddress, 
-    unsigned short localPort = 0) THROW(SocketException);
+  void setLocalAddressAndPort(const string &localAddress,
+                              unsigned short localPort = 0)
+      THROW(SocketException);
 
   /**
    *   If WinSock, unload the WinSock DLLs; otherwise do nothing.  We ignore
@@ -84,7 +85,7 @@ public:
    *   completeness.  If you are running on Windows and you are concerned
    *   about DLL resource consumption, call this after you are done with all
    *   Socket instances.  If you execute this on Windows while some instance of
-   *   Socket exists, you are toast.  For portability of client code, this is 
+   *   Socket exists, you are toast.  For portability of client code, this is
    *   an empty function on non-Windows platforms so you can always include it.
    *   @param buffer buffer to receive the data
    *   @param bufferLen maximum number of bytes to read into buffer
@@ -108,7 +109,7 @@ private:
   void operator=(const Socket &sock);
 
 protected:
-  int sockDesc;              // Socket descriptor
+  int sockDesc; // Socket descriptor
   Socket(int type, int protocol) THROW(SocketException);
   Socket(int sockDesc);
 };
@@ -126,7 +127,7 @@ public:
    *   @exception SocketException thrown if unable to establish connection
    */
   void connect(const string &foreignAddress, unsigned short foreignPort)
-    THROW(SocketException);
+      THROW(SocketException);
 
   /**
    *   Write the given buffer to this socket.  Call connect() before
@@ -184,7 +185,7 @@ public:
    *   @param foreignPort foreign port
    *   @exception SocketException thrown if unable to create TCP socket
    */
-  TCPSocket(const string &foreignAddress, unsigned short foreignPort) 
+  TCPSocket(const string &foreignAddress, unsigned short foreignPort)
       THROW(SocketException);
 
 private:
@@ -220,12 +221,13 @@ public:
    *   @exception SocketException thrown if unable to create TCP server socket
    */
   TCPServerSocket(const string &localAddress, unsigned short localPort,
-      int queueLen = 5) THROW(SocketException);
+                  int queueLen = 5) THROW(SocketException);
 
   /**
    *   Blocks until a new connection is established on this socket or error
    *   @return new connection socket
-   *   @exception SocketException thrown if attempt to accept a new connection fails
+   *   @exception SocketException thrown if attempt to accept a new connection
+   * fails
    */
   TCPSocket *accept() THROW(SocketException);
 

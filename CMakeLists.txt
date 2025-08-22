@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(inspector VERSION 0.1.0 LANGUAGES CXX)
+project(
+  inspector
+  VERSION 0.1.0
+  LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -13,7 +16,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Options
-set(CLANG_LIBDIR "" CACHE PATH "Path to Clang library directory for static linking (required)")
+set(CLANG_LIBDIR
+    ""
+    CACHE PATH "Path to Clang library directory for static linking (required)")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
 # Find required packages
@@ -38,18 +43,19 @@ include_directories(${LLVM_INCLUDE_DIRS})
 execute_process(
   COMMAND llvm-config --libs --link-static all
   OUTPUT_VARIABLE LLVM_STATIC_LIBS_STRING
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 execute_process(
   COMMAND llvm-config --ldflags
   OUTPUT_VARIABLE LLVM_LDFLAGS
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Handle Clang configuration
 if(NOT CLANG_LIBDIR OR NOT EXISTS ${CLANG_LIBDIR})
-  message(FATAL_ERROR "CLANG_LIBDIR (${CLANG_LIBDIR}) must be set to a valid directory containing Clang static libraries. Use -DCLANG_LIBDIR=/path/to/clang/lib")
+  message(
+    FATAL_ERROR
+      "CLANG_LIBDIR (${CLANG_LIBDIR}) must be set to a valid directory containing Clang static libraries. Use -DCLANG_LIBDIR=/path/to/clang/lib"
+  )
 endif()
 
 message(STATUS "Using Clang library directory: ${CLANG_LIBDIR}")
@@ -68,7 +74,10 @@ if(EXISTS ${CLANG_INCLUDE_DIRS})
   include_directories(${CLANG_INCLUDE_DIRS})
   message(STATUS "Using Clang include directory: ${CLANG_INCLUDE_DIRS}")
 else()
-  message(WARNING "Could not find Clang include directory at ${CLANG_INCLUDE_DIRS}, you may need to set include paths manually")
+  message(
+    WARNING
+      "Could not find Clang include directory at ${CLANG_INCLUDE_DIRS}, you may need to set include paths manually"
+  )
 endif()
 
 # Include project headers
@@ -82,8 +91,7 @@ set(INSPECTOR_INCLUDE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(INSPECTOR_INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 file(GLOB_RECURSE INSPECTOR_HEADERS "${INSPECTOR_INCLUDE_SOURCE_DIR}/*.h")
 
-install(FILES ${INSPECTOR_HEADERS}
-  DESTINATION "${INSPECTOR_INCLUDE_DIR}")
+install(FILES ${INSPECTOR_HEADERS} DESTINATION "${INSPECTOR_INCLUDE_DIR}")
 
 # Add test and python subdirectories if they exist
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")

@@ -12,7 +12,7 @@ def read_message(input):
         if not buf:
             break
         partial_line += buf
-        lines = partial_line.split(b'\0')
+        lines = partial_line.split(b"\0")
         partial_line = lines.pop()
         for line in lines:
             yield line.decode("ascii")

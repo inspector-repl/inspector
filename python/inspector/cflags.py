@@ -1,6 +1,6 @@
 from .config import LIBRARY_PATH
 
-INSPECTOR_MACRO = '-DINSPECTOR=<inspector/__FILE__-__LINE__>'
+INSPECTOR_MACRO = "-DINSPECTOR=<inspector/__FILE__-__LINE__>"
 
 
 def print_cflags(args):

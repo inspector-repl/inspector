@@ -1,8 +1,6 @@
 import sys
 import argparse
 
-import sys
-import argparse
 
 from .prebuild import generate_header_for_file
 from .cflags import print_cflags
@@ -25,7 +23,7 @@ def parse_options(argv):
 
     args = parser.parse_args(argv)
 
-    if 'func' not in args:
+    if "func" not in args:
         parser.print_help()
         sys.exit(1)
     return args

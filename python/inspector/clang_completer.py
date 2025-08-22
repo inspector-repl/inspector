@@ -15,10 +15,15 @@ class ClangCompleter(Completer):
         column = len(document) + 1
         self.content[self.line - 1] = document
         cmd = [
-            "clang++", "-fsyntax-only", "-Xclang", "-code-completion-macros",
+            "clang++",
+            "-fsyntax-only",
             "-Xclang",
-            "-code-completion-at=-:%d:%d" % (self.line,
-                                             column), "-x", "c++", "-"
+            "-code-completion-macros",
+            "-Xclang",
+            "-code-completion-at=-:%d:%d" % (self.line, column),
+            "-x",
+            "c++",
+            "-",
         ]
         p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         compilation_unit = "".join(self.content).encode("utf-8")
