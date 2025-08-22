@@ -85,12 +85,18 @@
               pythonEnv
             ];
 
-            buildInputs = with pkgs; [
-              jsoncpp
-              llvmPackages.clang-unwrapped.dev
-              llvmPackages.clang-unwrapped.lib
-              llvm.dev
-            ];
+            buildInputs =
+              with pkgs;
+              [
+                jsoncpp
+                llvmPackages.clang-unwrapped.dev
+                llvmPackages.clang-unwrapped.lib
+                llvm.dev
+              ]
+              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                libffi
+                libxml2
+              ];
 
             cmakeFlags = [
               "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
@@ -112,19 +118,25 @@
               stdenv = llvmPackages.stdenv;
             })
               {
-                buildInputs = with pkgs; [
-                  # C++ dependencies
-                  jsoncpp
-                  zlib
-                  llvmPackages.clang-unwrapped.dev
-                  llvmPackages.clang-unwrapped.lib
-                  llvmPackages.clang
-                  llvmPackages.lldb
-                  llvm.dev
+                buildInputs =
+                  with pkgs;
+                  [
+                    # C++ dependencies
+                    jsoncpp
+                    zlib
+                    llvmPackages.clang-unwrapped.dev
+                    llvmPackages.clang-unwrapped.lib
+                    llvmPackages.clang
+                    llvmPackages.lldb
+                    llvm.dev
 
-                  # Python environment
-                  pythonEnv
-                ];
+                    # Python environment
+                    pythonEnv
+                  ]
+                  ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                    libffi
+                    libxml2
+                  ];
                 nativeBuildInputs = with pkgs; [
                   # Build tools
                   cmake

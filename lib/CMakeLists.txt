@@ -40,6 +40,16 @@ target_compile_options(inspector PUBLIC
 # Find system libraries
 find_package(Threads REQUIRED)
 
+# macOS-specific dependencies
+if(APPLE)
+  # Find libffi
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(FFI libffi)
+
+  # Find libxml2
+  find_package(LibXml2)
+endif()
+
 # Link libraries
 if(CLANG_LIBDIR AND EXISTS ${CLANG_LIBDIR})
   # When using custom Clang libraries, use the group linking approach
@@ -55,7 +65,22 @@ if(CLANG_LIBDIR AND EXISTS ${CLANG_LIBDIR})
       ${ZLIB_LIBRARIES}
       ${CMAKE_DL_LIBS}
       Threads::Threads
+      # macOS system frameworks
+      "-framework CoreFoundation"
+      "-framework CoreServices"
     )
+    
+    # Add libffi if found
+    if(FFI_FOUND)
+      target_link_libraries(inspector ${FFI_LIBRARIES})
+      target_include_directories(inspector PUBLIC ${FFI_INCLUDE_DIRS})
+    endif()
+    
+    # Add libxml2 if found
+    if(LibXml2_FOUND)
+      target_link_libraries(inspector ${LIBXML2_LIBRARIES})
+      target_include_directories(inspector PUBLIC ${LIBXML2_INCLUDE_DIRS})
+    endif()
   else()
     # Linux/Unix supports --start-group/--end-group for circular dependencies
     target_link_libraries(inspector 
