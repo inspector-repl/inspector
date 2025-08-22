@@ -4,12 +4,13 @@ from .repl import Repl
 from .socket_path import get_socket_directory
 import socket
 import json
+from typing import Iterator
 
 
-def read_message(input):
+def read_message(io: socket.socket) -> Iterator[str]:
     partial_line = b""
     while True:
-        buf = input.recv(8192)
+        buf = io.recv(8192)
         if not buf:
             break
         partial_line += buf
@@ -21,7 +22,7 @@ def read_message(input):
         yield partial_line.decode("ascii")
 
 
-def process_clients(args):
+def process_clients(_args: list[str]) -> None:
     # Get platform-specific socket directory
     socket_dir = get_socket_directory()
 

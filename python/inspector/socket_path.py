@@ -5,7 +5,7 @@ import platform
 from pathlib import Path
 
 
-def get_socket_directory():
+def get_socket_directory() -> Path:
     """Get platform-specific socket directory."""
     system = platform.system()
 

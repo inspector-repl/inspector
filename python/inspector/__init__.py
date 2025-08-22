@@ -1,13 +1,12 @@
 import sys
 import argparse
 
-
 from .prebuild import generate_header_for_file
 from .cflags import print_cflags
 from . import repl_server
 
 
-def parse_options(argv):
+def parse_options(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
 
@@ -29,12 +28,12 @@ def parse_options(argv):
     return args
 
 
-def _real_main(argv):
+def _real_main(argv: list[str]) -> None:
     args = parse_options(argv)
     args.func(args)
 
 
-def main():
+def main() -> None:
     try:
         _real_main(sys.argv[1:])
     except KeyboardInterrupt:

@@ -40,6 +40,27 @@
           # Build LLVM with static libraries
           llvm = llvmPackages.llvm;
 
+          # Package types-pygments
+          types-pygments = pkgs.python3.pkgs.buildPythonPackage rec {
+            pname = "types_pygments";
+            version = "2.19.0.20250809";
+
+            src = pkgs.fetchPypi {
+              inherit pname version;
+              hash = "sha256-ATZv2T73PHkubuFkmNOr96GE8WJLULd/lQakfthZdMI=";
+            };
+
+            format = "setuptools";
+
+            # This is a type stubs package, no runtime dependencies
+            propagatedBuildInputs = [ ];
+
+            # No tests in the PyPI package
+            doCheck = false;
+
+            pythonImportsCheck = [ "pygments-stubs" ];
+          };
+
           pythonEnv = pkgs.python3.withPackages (
             ps: with ps; [
               prompt-toolkit
@@ -76,6 +97,13 @@
         in
         {
           packages.default = inspector;
+
+          checks =
+            let
+              packages = pkgs.lib.mapAttrs' (n: pkgs.lib.nameValuePair "package-${n}") self'.packages;
+              devShells = pkgs.lib.mapAttrs' (n: pkgs.lib.nameValuePair "devShell-${n}") self'.devShells;
+            in
+            packages // devShells;
 
           devShells.default = llvmPackages.stdenv.mkDerivation {
             name = "inspector-dev-shell";
@@ -129,6 +157,23 @@
               ruff-check.enable = true;
               ruff-format.enable = true;
               shellcheck.enable = true;
+              mypy = {
+                enable = true;
+                directories = {
+                  "python" = {
+                    modules = [ "inspector" ];
+                    options = [
+                      "--strict"
+                    ];
+                    extraPythonPackages = [
+                      pkgs.python3.pkgs.prompt-toolkit
+                      pkgs.python3.pkgs.pygments
+                      pkgs.python3.pkgs.libclang
+                      types-pygments
+                    ];
+                  };
+                };
+              };
             };
           };
         };

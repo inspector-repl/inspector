@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import os
-from clang.cindex import Index, TranslationUnit, CursorKind
+import argparse
+from typing import Iterator
+from clang.cindex import Index, TranslationUnit, CursorKind, Cursor, SourceLocation  # type: ignore[import-untyped]
 from .config import INCLUDE_PATH
 
 
-def _escape_c_string(string):
+def _escape_c_string(string: str) -> str:
     result = ""
     for c in string:
         if not (32 <= ord(c) < 127) or c == "\\" or c == '"':
@@ -14,7 +16,9 @@ def _escape_c_string(string):
     return '"' + result + '"'
 
 
-def _find_inspector_callsites(node, closure, in_function):
+def _find_inspector_callsites(
+    node: Cursor, closure: list[Cursor], in_function: bool
+) -> tuple[list[SourceLocation], list[list[Cursor]]]:
     """
     Macro invocations are not aligned with the remaining ast.
     - We need the macro invocation to get source line, where INSPECTOR was included
@@ -50,7 +54,9 @@ def _find_inspector_callsites(node, closure, in_function):
     return include_locations, closures
 
 
-def find_inspector_callsites(nodes):
+def find_inspector_callsites(
+    nodes: Cursor,
+) -> Iterator[tuple[SourceLocation, list[Cursor]]]:
     include_locations, closures = _find_inspector_callsites(nodes, [], False)
     return zip(include_locations, closures)
 
@@ -86,7 +92,9 @@ INSPECTOR_HEADER_TEMPLATE = """
 """
 
 
-def write_header(location, closure, include_paths):
+def write_header(
+    location: SourceLocation, closure: list[Cursor], include_paths: list[str]
+) -> None:
     file_name = location.file.name
     # expanded form of  __FILE__ __LINE__
     path = '"{}"-{}'.format(file_name, location.line)
@@ -116,7 +124,7 @@ def write_header(location, closure, include_paths):
         f.write(INSPECTOR_HEADER_TEMPLATE.format(**data))
 
 
-def generate_header_for_file(args):
+def generate_header_for_file(args: argparse.Namespace) -> None:
     import subprocess
 
     index = Index.create()
@@ -161,7 +169,7 @@ def generate_header_for_file(args):
         options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
     )
     if not tu:
-        parser.error("unable to load input")
+        raise RuntimeError("unable to load input")
 
     # Collect include paths that were successfully used (keep the full -I flag)
     include_paths = []
