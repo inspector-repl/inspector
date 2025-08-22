@@ -173,7 +173,3 @@ def generate_header_for_file(args):
     print("Writing include files to:")
     for location, closure in callsites:
         write_header(location, closure, include_paths)
-
-
-if __name__ == "__main__":
-    main()
