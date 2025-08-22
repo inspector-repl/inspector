@@ -51,7 +51,7 @@
 
           inspector = stdenv.mkDerivation rec {
             pname = "inspector";
-            version = "0.1";
+            version = "0.1.0";
 
             src = ./.;
 
@@ -70,15 +70,8 @@
             ];
 
             cmakeFlags = [
-              "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
-              "-GNinja"
+              "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
             ];
-
-            postInstall = ''
-              # Install Python package
-              cd python
-              ${pythonEnv}/bin/python setup.py install --prefix=$out
-            '';
           };
         in
         {
@@ -98,13 +91,13 @@
               llvmPackages.clang-unwrapped.dev
               llvmPackages.clang-unwrapped.lib
               llvmPackages.clang
+              llvmPackages.lldb
               llvm.dev
 
               # Python environment
               pythonEnv
 
               # Development tools
-              gdb
               (lib.hiPrio pkgs.buildPackages.clang-tools)
             ];
 
