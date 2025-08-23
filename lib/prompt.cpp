@@ -1,18 +1,19 @@
 #include "inspector/prompt.h"
 
-#include <llvm/Support/raw_ostream.h>
 #include <json/json.h>
+#include <llvm/Support/raw_ostream.h>
 
-#include <sstream>
 #include <iostream>
+#include <sstream>
 
 #define RCVBUFSIZE 10240
 
 using namespace inspector;
 
-Prompt::Prompt(TCPSocket &socket_) : socket(socket_) {};
+Prompt::Prompt(UnixSocket &socket_) : socket(socket_) {};
 
-string Prompt::getJsonInspectorLocation(std::string filePath, unsigned lineNumber) {
+string Prompt::getJsonInspectorLocation(std::string filePath,
+                                        unsigned lineNumber) {
   Json::Value message;
 
   message["file"] = filePath.c_str();
@@ -47,12 +48,14 @@ std::string Prompt::getCppStatement() {
   int totalBytesReceived = 0;
 
   do {
-    if ((bytesReceived = (socket.recv(receiveBuffer + totalBytesReceived, RCVBUFSIZE - totalBytesReceived))) <= 0) {
+    if ((bytesReceived = (socket.recv(receiveBuffer + totalBytesReceived,
+                                      RCVBUFSIZE - totalBytesReceived))) <= 0) {
       cerr << "Unable to read";
       exit(1);
     }
     totalBytesReceived += bytesReceived;
-  } while (totalBytesReceived < RCVBUFSIZE && receiveBuffer[totalBytesReceived - 1] != '\0');
+  } while (totalBytesReceived < RCVBUFSIZE &&
+           receiveBuffer[totalBytesReceived - 1] != '\0');
 
   receiveBuffer[totalBytesReceived - 1] = '\0';
 

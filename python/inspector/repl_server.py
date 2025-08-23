@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 
 from .repl import Repl
+from .socket_path import get_socket_directory
 import socket
 import json
+from typing import Iterator
 
 
-def read_message(input):
+def read_message(io: socket.socket) -> Iterator[str]:
     partial_line = b""
     while True:
-        buf = input.recv(8192)
+        buf = io.recv(8192)
         if not buf:
             break
         partial_line += buf
-        lines = partial_line.split(b'\0')
+        lines = partial_line.split(b"\0")
         partial_line = lines.pop()
         for line in lines:
             yield line.decode("ascii")
@@ -20,22 +22,38 @@ def read_message(input):
         yield partial_line.decode("ascii")
 
 
-def process_clients(args):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(("localhost", 5000))
-    s.listen()
-    print("listen for connections")
-    while True:
-        conn, addr = s.accept()
-        input = read_message(conn)
-        output = conn
-        file_spec = json.loads(next(input))
-        file_path, line_number = file_spec["file"], file_spec["line"]
-        repl = Repl(input, output, file_path, line_number)
-        repl.display_surrounding_code()
-        repl.run()
+def process_clients(_args: list[str]) -> None:
+    # Get platform-specific socket directory
+    socket_dir = get_socket_directory()
 
+    # Create socket directory if it doesn't exist
+    socket_dir.mkdir(parents=True, exist_ok=True)
 
-if __name__ == "__main__":
-    process_clients()
+    # Socket path
+    socket_path = socket_dir / "sock"
+
+    # Remove existing socket if it exists
+    if socket_path.exists():
+        socket_path.unlink()
+
+    # Create Unix socket
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    with s:
+        s.bind(str(socket_path))
+        s.listen()
+        print(f"Listening on Unix socket: {socket_path}")
+
+        try:
+            while True:
+                conn, _addr = s.accept()
+                with conn:
+                    input_msg = read_message(conn)
+                    file_spec = json.loads(next(input_msg))
+                    file_path, line_number = file_spec["file"], file_spec["line"]
+                    repl = Repl(input_msg, conn, file_path, line_number)
+                    repl.display_surrounding_code()
+                    repl.run()
+        finally:
+            # Clean up socket on exit
+            if socket_path.exists():
+                socket_path.unlink()
