@@ -8,7 +8,7 @@
   jsoncpp,
   llvmPackages,
   llvm,
-  pythonEnv,
+  python3,
   libffi,
 }:
 
@@ -32,7 +32,10 @@ stdenv.mkDerivation {
     cmake
     ninja
     pkg-config
-    pythonEnv
+    python3
+    python3.pkgs.wrapPython
+    python3.pkgs.hatchling
+    python3.pkgs.pip
     (lib.hiPrio pkgs.buildPackages.clang-tools)
   ];
 
@@ -46,7 +49,17 @@ stdenv.mkDerivation {
     libffi
   ];
 
+  pythonPath = with python3.pkgs; [
+    prompt-toolkit
+    pygments
+    libclang
+  ];
+
   cmakeFlags = [
     "-DCLANG_LIBDIR=${lib.getLib llvmPackages.clang-unwrapped}/lib"
   ];
+
+  postFixup = ''
+    wrapPythonPrograms
+  '';
 }

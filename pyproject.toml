@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inspector"
+version = "0.1.0"
+description = "Inspector - C++ REPL integration"
+requires-python = ">=3.13"
+license = "MIT"
+dependencies = [
+    "prompt-toolkit",
+    "pygments",
+    "libclang",
+]
+
+[project.scripts]
+inspector = "inspector:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["python/inspector"]

@@ -63,3 +63,4 @@ cmake*
 Makefile
 *.pyc
 .*.swp
+python/inspector/config.py
