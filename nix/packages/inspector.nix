@@ -16,7 +16,17 @@ stdenv.mkDerivation {
   pname = "inspector";
   version = "0.1.0";
 
-  src = ../..;
+  src = lib.fileset.toSource {
+    root = ../..;
+    fileset = lib.fileset.unions [
+      ../../CMakeLists.txt
+      ../../pyproject.toml
+      ../../include
+      ../../lib
+      ../../python
+      ../../test
+    ];
+  };
 
   nativeBuildInputs = [
     cmake
