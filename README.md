@@ -45,7 +45,7 @@ $ ./main
 ### Requirements
 
 - a c++ compiler (gcc or clang++)
-- LLVM/Clang 19+ with clang-repl
+- LLVM/Clang 22+ with clang-repl (unreleased as of August 23, 2025)
 - jsoncpp
 - python3
 - python-prompt-toolkit (for python3)
@@ -63,17 +63,20 @@ nix develop
 
 ### Manual Installation
 
-You need LLVM/Clang 19 or later with clang-repl support. Most modern distributions include this in their LLVM packages.
+You need LLVM/Clang 22 or later with clang-repl support. As LLVM 22 is unreleased (as of August 23, 2025), you'll need to build from source or use the development version.
 
-On macOS with Homebrew:
+Building LLVM from source:
 ```bash
-brew install llvm@19 ninja jsoncpp
+git clone https://github.com/llvm/llvm-project.git
+cd llvm-project
+cmake -S llvm -B build -G Ninja \
+  -DLLVM_ENABLE_PROJECTS="clang" \
+  -DCLANG_ENABLE_CLANG_REPL=ON \
+  -DCMAKE_BUILD_TYPE=Release
+ninja -C build
 ```
 
-On Ubuntu/Debian:
-```bash
-apt install llvm-19-dev clang-19 libjsoncpp-dev ninja-build
-```
+Note: Package managers will provide LLVM 22 packages once it's officially released.
 
 ### Build Inspector
 
@@ -82,15 +85,19 @@ git clone git@github.com:inspector-repl/inspector.git
 cd inspector
 mkdir build
 cd build
-cmake -GNinja ..
+cmake -GNinja .. -DCLANG_LIBDIR=<path-to-llvm>/lib
 ninja
 ```
+
+Note: The `-DCLANG_LIBDIR` flag should point to the lib directory of your LLVM/Clang installation. For example:
+- If built from source: `-DCLANG_LIBDIR=/path/to/llvm-project/build/lib`
+- If installed system-wide: `-DCLANG_LIBDIR=/usr/lib/llvm-22/lib`
 
 ## Usage
 
 ```
 # bring python bindings
-# (requires clang with clang-repl support, LLVM 19+ recommended)
+# (requires clang with clang-repl support, LLVM 22+ required)
 # and libclang into path
 export PYTHONPATH=$(readlink -f <llvm-root>/src/tools/clang/bindings/python/)
 export LD_LIBRARY_PATH=$(readlink -f <llvm-repo>/inst/lib)
