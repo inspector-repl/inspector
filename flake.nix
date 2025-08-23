@@ -72,7 +72,7 @@
             ]
           );
 
-          inspector = stdenv.mkDerivation rec {
+          inspector = stdenv.mkDerivation {
             pname = "inspector";
             version = "0.1.0";
 
@@ -104,7 +104,11 @@
           };
         in
         {
-          packages.default = inspector;
+          packages = pkgs.lib.optionalAttrs (!stdenv.hostPlatform.isDarwin) {
+            # TODO: fix linking on macOS
+            default = inspector;
+            inspector = inspector;
+          };
 
           checks =
             let
