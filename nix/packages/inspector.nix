@@ -8,7 +8,7 @@
   jsoncpp,
   llvmPackages,
   llvm,
-  pythonEnv,
+  python3,
   libffi,
 }:
 
@@ -16,13 +16,26 @@ stdenv.mkDerivation {
   pname = "inspector";
   version = "0.1.0";
 
-  src = ../..;
+  src = lib.fileset.toSource {
+    root = ../..;
+    fileset = lib.fileset.unions [
+      ../../CMakeLists.txt
+      ../../pyproject.toml
+      ../../include
+      ../../lib
+      ../../python
+      ../../test
+    ];
+  };
 
   nativeBuildInputs = [
     cmake
     ninja
     pkg-config
-    pythonEnv
+    python3
+    python3.pkgs.wrapPython
+    python3.pkgs.hatchling
+    python3.pkgs.pip
     (lib.hiPrio pkgs.buildPackages.clang-tools)
   ];
 
@@ -36,7 +49,17 @@ stdenv.mkDerivation {
     libffi
   ];
 
+  pythonPath = with python3.pkgs; [
+    prompt-toolkit
+    pygments
+    libclang
+  ];
+
   cmakeFlags = [
     "-DCLANG_LIBDIR=${lib.getLib llvmPackages.clang-unwrapped}/lib"
   ];
+
+  postFixup = ''
+    wrapPythonPrograms
+  '';
 }

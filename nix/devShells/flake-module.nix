@@ -11,6 +11,7 @@
           pygments
           setuptools
           libclang
+          hatchling
         ]
       );
     in
@@ -50,12 +51,6 @@
 
               shellHook = ''
                 echo "Inspector development environment"
-                echo "Available tools:"
-                echo "  - cmake: Build system"
-                echo "  - clang-repl: C++ interpreter (LLVM 19)"
-                echo "  - python: With prompt-toolkit and pygments"
-                echo "  - nix fmt: Format code"
-                echo ""
                 echo "To build:"
                 echo "  mkdir -p build && cd build"
                 echo "  cmake -GNinja .."

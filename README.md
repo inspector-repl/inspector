@@ -47,7 +47,9 @@ $ ./main
 - jsoncpp
 - python3
 - python-prompt-toolkit (for python3)
-- python-setuptools (for python3)
+- python-pygments (for python3)
+- python-libclang (for python3)
+- python-hatchling (for building the Python package)
 - pkg-config
 - ninja (build system)
 
