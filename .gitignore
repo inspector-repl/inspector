@@ -64,3 +64,4 @@ Makefile
 *.pyc
 .*.swp
 python/inspector/config.py
+result
