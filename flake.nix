@@ -95,7 +95,6 @@
               ]
               ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
                 libffi
-                libxml2
               ];
 
             cmakeFlags = [
@@ -104,7 +103,7 @@
           };
         in
         {
-          packages = pkgs.lib.optionalAttrs (!stdenv.hostPlatform.isDarwin) {
+          packages = {
             # TODO: fix linking on macOS
             default = inspector;
             inspector = inspector;
@@ -139,7 +138,6 @@
                   ]
                   ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
                     libffi
-                    libxml2
                   ];
                 nativeBuildInputs = with pkgs; [
                   # Build tools
