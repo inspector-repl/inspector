@@ -83,6 +83,8 @@
               ninja
               pkg-config
               pythonEnv
+              # wrapped clang-tidy
+              (lib.hiPrio pkgs.buildPackages.clang-tools)
             ];
 
             buildInputs =
