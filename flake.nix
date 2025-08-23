@@ -18,7 +18,9 @@
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
-        inputs.treefmt-nix.flakeModule
+        ./nix/packages/flake-module.nix
+        ./nix/devShells/flake-module.nix
+        ./nix/formatter/flake-module.nix
       ];
 
       systems = [
@@ -34,170 +36,13 @@
           pkgs,
           ...
         }:
-        let
-          # Use LLVM 20 stdenv for consistency
-          llvmPackages = pkgs.llvmPackages_git;
-          stdenv = llvmPackages.stdenv;
-
-          # Build LLVM with static libraries
-          llvm = llvmPackages.llvm;
-
-          # Package types-pygments
-          types-pygments = pkgs.python3.pkgs.buildPythonPackage rec {
-            pname = "types_pygments";
-            version = "2.19.0.20250809";
-
-            src = pkgs.fetchPypi {
-              inherit pname version;
-              hash = "sha256-ATZv2T73PHkubuFkmNOr96GE8WJLULd/lQakfthZdMI=";
-            };
-
-            format = "setuptools";
-
-            # This is a type stubs package, no runtime dependencies
-            propagatedBuildInputs = [ ];
-
-            # No tests in the PyPI package
-            doCheck = false;
-
-            pythonImportsCheck = [ "pygments-stubs" ];
-          };
-
-          pythonEnv = pkgs.python3.withPackages (
-            ps: with ps; [
-              prompt-toolkit
-              pygments
-              setuptools
-              libclang
-            ]
-          );
-
-          inspector = stdenv.mkDerivation {
-            pname = "inspector";
-            version = "0.1.0";
-
-            src = ./.;
-
-            nativeBuildInputs = with pkgs; [
-              cmake
-              ninja
-              pkg-config
-              pythonEnv
-              # wrapped clang-tidy
-              (lib.hiPrio pkgs.buildPackages.clang-tools)
-            ];
-
-            buildInputs =
-              with pkgs;
-              [
-                jsoncpp
-                llvmPackages.clang-unwrapped.dev
-                llvmPackages.clang-unwrapped.lib
-                llvm.dev
-              ]
-              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                libffi
-              ];
-
-            cmakeFlags = [
-              "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
-            ];
-          };
-        in
         {
-          packages = {
-            # TODO: fix linking on macOS
-            default = inspector;
-            inspector = inspector;
-          };
-
           checks =
             let
               packages = pkgs.lib.mapAttrs' (n: pkgs.lib.nameValuePair "package-${n}") self'.packages;
               devShells = pkgs.lib.mapAttrs' (n: pkgs.lib.nameValuePair "devShell-${n}") self'.devShells;
             in
             packages // devShells;
-
-          devShells.default =
-            (pkgs.mkShell.override {
-              stdenv = llvmPackages.stdenv;
-            })
-              {
-                buildInputs =
-                  with pkgs;
-                  [
-                    # C++ dependencies
-                    jsoncpp
-                    zlib
-                    llvmPackages.clang-unwrapped.dev
-                    llvmPackages.clang-unwrapped.lib
-                    llvmPackages.clang
-                    llvmPackages.lldb
-                    llvm.dev
-
-                    # Python environment
-                    pythonEnv
-                  ]
-                  ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                    libffi
-                  ];
-                nativeBuildInputs = with pkgs; [
-                  # Build tools
-                  cmake
-                  ninja
-                  pkg-config
-
-                  # Development tools
-                  (lib.hiPrio pkgs.buildPackages.clang-tools)
-                ];
-
-                cmakeFlags = [
-                  "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
-                ];
-
-                shellHook = ''
-                  echo "Inspector development environment"
-                  echo "Available tools:"
-                  echo "  - cmake: Build system"
-                  echo "  - clang-repl: C++ interpreter (LLVM 19)"
-                  echo "  - python: With prompt-toolkit and pygments"
-                  echo "  - nix fmt: Format code"
-                  echo ""
-                  echo "To build:"
-                  echo "  mkdir -p build && cd build"
-                  echo "  cmake -GNinja .."
-                  echo "  make"
-                '';
-              };
-
-          treefmt = {
-            projectRootFile = "flake.nix";
-            programs = {
-              nixfmt.enable = true;
-              clang-format.enable = true;
-              cmake-format.enable = true;
-              ruff-check.enable = true;
-              ruff-format.enable = true;
-              shellcheck.enable = true;
-              mypy = {
-                enable = true;
-                directories = {
-                  "python" = {
-                    modules = [ "inspector" ];
-                    options = [
-                      "--strict"
-                    ];
-                    extraPythonPackages = [
-                      pkgs.python3.pkgs.prompt-toolkit
-                      pkgs.python3.pkgs.pygments
-                      pkgs.python3.pkgs.libclang
-                      types-pygments
-                    ];
-                  };
-                };
-              };
-            };
-          };
         };
     };
 }
