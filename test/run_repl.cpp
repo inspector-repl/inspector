@@ -1,6 +1,7 @@
 #include "inspector/repl.h"
 
 #include <stdio.h>
+#include <string>
 
 int globalVar = 5;
 
