@@ -83,6 +83,29 @@ $ nix build .#checks.x86_64-linux.example-cmake   # make / meson / package-llvm2
 Run `inspector repl` in one terminal, then start your instrumented program
 in another. Pick whichever integration fits your build:
 
+### In the REPL
+
+```
+[0] .locals
+  v     std::vector<int>
+  name  std::string
+[1] v.push_back(4)
+[2] v
+(std::vector<int> &) {1, 2, 3, 4}
+[3] name + "!"
+(std::string &) "inspector!"
+[4] undefined + 1
+error: use of undeclared identifier 'undefined'
+```
+
+- Expressions print their value. Strings, containers, pairs and any type with
+  `operator<<` are shown by content. A trailing `;` suppresses the output.
+- Multi-line input continues while brackets are open.
+- `.locals`, `.where`, `.help`, `.abort`; `.continue` or Ctrl-D resumes the
+  program. Ctrl-C clears the current line.
+- History is saved in `$XDG_STATE_HOME/inspector/history`.
+- The server keeps running between breakpoints and programs.
+
 ### Any build system: compiler wrapper
 
 `inspector-c++` wraps the real compiler (`$INSPECTOR_CXX`, default `c++`).
@@ -103,6 +126,7 @@ Environment variables:
 | `INSPECTOR_INCLUDE_DIR` | where generated headers go (default `./.inspector-includes`) |
 | `INSPECTOR_SCAN_ALL` | parse every file, not only those containing `INSPECTOR` |
 | `INSPECTOR_NO_LINK` | don't add `-linspector` when linking |
+| `INSPECTOR_REQUIRED` | exit instead of continuing when no REPL is listening |
 
 ### CMake
 
@@ -132,8 +156,8 @@ See `examples/` for working setups; they run as `nix flake check` tests.
 - C++ only.
 - The quick pre-scan only looks at the source file itself. If
   `#include INSPECTOR` sits in a header, set `INSPECTOR_SCAN_ALL=1`.
-- The REPL server must already be running when the program reaches
-  `INSPECTOR`, otherwise the program exits with a socket error.
+- If no REPL is listening when the program reaches `INSPECTOR`, it prints a
+  warning and continues.
 
 ## TODO
 

@@ -1,4 +1,4 @@
-add_library(inspector SHARED socket.cpp socket_path.cpp repl.cpp prompt.cpp)
+add_library(inspector SHARED repl.cpp prompt.cpp)
 add_library(inspector::inspector ALIAS inspector)
 
 target_include_directories(
