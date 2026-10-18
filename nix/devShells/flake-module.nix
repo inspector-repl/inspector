@@ -2,7 +2,7 @@
   perSystem =
     { pkgs, ... }:
     let
-      llvmPackages = pkgs.llvmPackages_git;
+      llvmPackages = pkgs.llvmPackages_latest;
       llvm = llvmPackages.llvm;
 
       pythonEnv = pkgs.python3.withPackages (
@@ -34,7 +34,7 @@
                   llvm.dev
                   pythonEnv
                 ]
-                ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
                   libffi
                 ];
 
@@ -43,10 +43,6 @@
                 ninja
                 pkg-config
                 (lib.hiPrio pkgs.buildPackages.clang-tools)
-              ];
-
-              cmakeFlags = [
-                "-DCLANG_LIBDIR=${pkgs.lib.getLib llvmPackages.clang-unwrapped}/lib"
               ];
 
               shellHook = ''

@@ -2,7 +2,7 @@
   perSystem =
     { pkgs, ... }:
     let
-      llvmPackages = pkgs.llvmPackages_git;
+      llvmPackages = pkgs.llvmPackages_latest;
       stdenv = llvmPackages.stdenv;
       llvm = llvmPackages.llvm;
 

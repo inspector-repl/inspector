@@ -13,5 +13,5 @@ if libpath.exists():
     INCLUDE_PATH = str(build_dir.parent / "include")
 else:
     # Installed mode - use absolute paths
-    LIBRARY_PATH = "@CMAKE_INSTALL_PREFIX@/@CMAKE_SHARED_LIBRARY_PREFIX@"
-    INCLUDE_PATH = "@INSPECTOR_INCLUDE_DIR@"
+    LIBRARY_PATH = "@CMAKE_INSTALL_FULL_LIBDIR@"
+    INCLUDE_PATH = "@CMAKE_INSTALL_FULL_INCLUDEDIR@"

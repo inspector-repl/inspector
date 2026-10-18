@@ -20,6 +20,7 @@ stdenv.mkDerivation {
     root = ../..;
     fileset = lib.fileset.unions [
       ../../CMakeLists.txt
+      ../../cmake
       ../../pyproject.toml
       ../../include
       ../../lib
@@ -32,10 +33,14 @@ stdenv.mkDerivation {
     cmake
     ninja
     pkg-config
-    python3
+    (python3.withPackages (ps: [
+      ps.hatchling
+      ps.pip
+      ps.libclang
+      ps.prompt-toolkit
+      ps.pygments
+    ]))
     python3.pkgs.wrapPython
-    python3.pkgs.hatchling
-    python3.pkgs.pip
     (lib.hiPrio pkgs.buildPackages.clang-tools)
   ];
 
@@ -45,7 +50,7 @@ stdenv.mkDerivation {
     llvmPackages.clang-unwrapped.lib
     llvm.dev
   ]
-  ++ lib.optionals stdenv.isDarwin [
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
     libffi
   ];
 
@@ -56,8 +61,10 @@ stdenv.mkDerivation {
   ];
 
   cmakeFlags = [
-    "-DCLANG_LIBDIR=${lib.getLib llvmPackages.clang-unwrapped}/lib"
+    "-DCLANG_RESOURCE_DIR=${lib.getLib llvmPackages.clang-unwrapped}/lib/clang/${lib.versions.major llvmPackages.clang-unwrapped.version}"
   ];
+
+  doCheck = true;
 
   postFixup = ''
     wrapPythonPrograms

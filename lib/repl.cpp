@@ -57,7 +57,8 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
     CB.SetTargetTriple(llvm::sys::getProcessTriple());
 
     // Set up compiler arguments
-    std::vector<const char *> Args;
+    std::vector<const char *> Args = {"-resource-dir",
+                                      INSPECTOR_CLANG_RESOURCE_DIR};
 
     // Add include paths from clingIncludes array
     if (clingIncludes) {
@@ -83,7 +84,7 @@ static void inspectorRunReplImpl(const char *path, unsigned lineNumber,
 
     // Install error handler
     llvm::install_fatal_error_handler(
-        [](void *user_data, const char *reason, bool gen_crash_diag) {
+        [](void *, const char *reason, bool) {
           std::cerr << "LLVM fatal error: " << reason << std::endl;
           exit(1);
         },
