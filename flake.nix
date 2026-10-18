@@ -21,13 +21,13 @@
         ./nix/packages/flake-module.nix
         ./nix/devShells/flake-module.nix
         ./nix/formatter/flake-module.nix
+        ./nix/checks/flake-module.nix
       ];
 
       systems = [
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
-        "x86_64-darwin"
       ];
 
       perSystem =

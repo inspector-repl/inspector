@@ -1,67 +1,135 @@
 #include "inspector/prompt.h"
 
-#include <json/json.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/JSON.h>
 #include <llvm/Support/raw_ostream.h>
 
-#include <iostream>
-#include <sstream>
-
-#define RCVBUFSIZE 10240
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <utility>
 
 using namespace inspector;
 
-Prompt::Prompt(UnixSocket &socket_) : socket(socket_) {};
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0 // SO_NOSIGPIPE is used instead
+#endif
 
-string Prompt::getJsonInspectorLocation(std::string filePath,
-                                        unsigned lineNumber) {
-  Json::Value message;
+namespace {
 
-  message["file"] = filePath.c_str();
-  message["line"] = lineNumber;
-
-  Json::StreamWriterBuilder wbuilder;
-  return Json::writeString(wbuilder, message);
+auto sysError(const std::string &what) -> Disconnected {
+  // NOLINTNEXTLINE(concurrency-mt-unsafe): message only, races are harmless
+  return Disconnected{what + ": " + strerror(errno)};
 }
 
-std::string Prompt::getJsonValue(std::string value) {
-  Json::Value message;
-
-  message["value"] = value.c_str();
-
-  Json::StreamWriterBuilder wbuilder;
-  return Json::writeString(wbuilder, message);
+auto toJson(llvm::json::Object message) -> std::string {
+  std::string out;
+  llvm::raw_string_ostream stream(out);
+  stream << llvm::json::Value(std::move(message));
+  return out;
 }
 
-void Prompt::sendInspectorLocation(std::string path, unsigned lineNumber) {
-  std::string location = getJsonInspectorLocation(path, lineNumber);
-  socket.send(location.c_str(), location.length() + 1);
+} // namespace
+
+auto inspector::socketPath() -> std::filesystem::path {
+  // NOLINTBEGIN(concurrency-mt-unsafe): nothing modifies the environment
+  const char *dir = getenv("XDG_RUNTIME_DIR");
+  if (dir == nullptr) {
+    dir = getenv("TMPDIR");
+  }
+  // NOLINTEND(concurrency-mt-unsafe)
+  return std::filesystem::path(dir != nullptr ? dir : "/tmp") / "inspector" /
+         "sock";
 }
 
-void Prompt::sendResult(std::string value) {
-  std::string v = getJsonValue(value);
-  socket.send(v.c_str(), v.length() + 1);
+Prompt::Prompt(const std::filesystem::path &path)
+    : fd(socket(AF_UNIX, SOCK_STREAM, 0)) {
+  if (fd < 0) {
+    throw sysError("socket");
+  }
+  fcntl(fd, F_SETFD, FD_CLOEXEC); // NOLINT(cppcoreguidelines-pro-type-vararg)
+#ifdef SO_NOSIGPIPE
+  int one = 1;
+  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
+
+  sockaddr_un addr{};
+  addr.sun_family = AF_UNIX;
+  const std::string &native = path.native();
+  if (native.size() >= sizeof(addr.sun_path)) {
+    close(fd);
+    throw Disconnected{"socket path too long: " + native};
+  }
+  native.copy(std::data(addr.sun_path), native.size());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): sockaddr API
+  if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
+    const int savedErrno = errno;
+    close(fd);
+    errno = savedErrno;
+    throw sysError("connect " + native);
+  }
 }
 
-std::string Prompt::getCppStatement() {
-  char receiveBuffer[RCVBUFSIZE];
-  int bytesReceived = 0;
-  int totalBytesReceived = 0;
+Prompt::~Prompt() { close(fd); }
 
-  do {
-    if ((bytesReceived = (socket.recv(receiveBuffer + totalBytesReceived,
-                                      RCVBUFSIZE - totalBytesReceived))) <= 0) {
-      cerr << "Unable to read";
-      exit(1);
+void Prompt::send(const std::string &json) const {
+  // Include the trailing NUL as message delimiter.
+  std::string_view left(json.c_str(), json.size() + 1);
+  while (!left.empty()) {
+    const ssize_t sent = ::send(fd, left.data(), left.size(), MSG_NOSIGNAL);
+    if (sent <= 0) {
+      throw sysError("send");
     }
-    totalBytesReceived += bytesReceived;
-  } while (totalBytesReceived < RCVBUFSIZE &&
-           receiveBuffer[totalBytesReceived - 1] != '\0');
+    left.remove_prefix(static_cast<size_t>(sent));
+  }
+}
 
-  receiveBuffer[totalBytesReceived - 1] = '\0';
+void Prompt::sendInspectorLocation(const std::string &path, unsigned lineNumber,
+                                   const std::string &locals) const {
+  send(toJson(llvm::json::Object{
+      {"file", path}, {"line", lineNumber}, {"locals", locals}}));
+}
 
-  std::stringstream ss(receiveBuffer);
-  Json::Value jsonMessage;
-  ss >> jsonMessage;
-  std::string inputValue = jsonMessage["input"].asString();
-  return inputValue;
+void Prompt::sendReady(const Reply &startup) const {
+  send(toJson(llvm::json::Object{
+      {"ready", true}, {"value", startup.value}, {"error", startup.error}}));
+}
+
+void Prompt::sendResult(const Reply &reply) const {
+  send(toJson(
+      llvm::json::Object{{"value", reply.value}, {"error", reply.error}}));
+}
+
+auto Prompt::getCppStatement() -> std::string {
+  constexpr size_t chunkSize = 4096;
+  size_t end = 0;
+  while ((end = pending.find('\0')) == std::string::npos) {
+    std::array<char, chunkSize> buf{};
+    const ssize_t received = recv(fd, buf.data(), buf.size(), 0);
+    if (received <= 0) {
+      throw Disconnected{"connection closed"};
+    }
+    pending.append(buf.data(), static_cast<size_t>(received));
+  }
+  auto message = llvm::json::parse(pending.substr(0, end));
+  pending.erase(0, end + 1);
+  if (!message) {
+    throw Disconnected{"invalid message: " +
+                       llvm::toString(message.takeError())};
+  }
+  const auto *object = message->getAsObject();
+  const auto input =
+      object != nullptr ? object->getString("input") : std::nullopt;
+  return input.value_or("").str();
 }

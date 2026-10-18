@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(inspector_example CXX)
+find_package(inspector REQUIRED)
+add_executable(example ../example.cpp)
+inspector_enable(example)

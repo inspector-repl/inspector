@@ -1,0 +1,33 @@
+# Everything except vendor style guides (mostly aliases of other checks or
+# rules specific to those projects) and:
+#  - portability-avoid-pragma-once: all supported compilers handle #pragma once
+#  - readability-trailing-comma: contradicts itself on nested initializers
+Checks: >
+  *,
+  -portability-avoid-pragma-once,
+  -readability-trailing-comma,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -darwin-*,
+  -fuchsia-*,
+  -google-*,
+  -hicpp-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -objc-*,
+  -zircon-*
+
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/include/inspector/.*\.h$'
+FormatStyle: none
+# Do not lint LLVM/jsoncpp headers pulled in from the store.
+ExcludeHeaderFilterRegex: '.*/nix/store/.*'
+CheckOptions:
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true
+  # libc maps POSIX symbols to different headers on glibc and Darwin
+  # (e.g. fcntl, ssize_t), so either set of includes fails on the other.
+  misc-include-cleaner.IgnoreHeaders: "fcntl\\.h;sys/types\\.h;sys/_types/.*;_fcntl\\.h;unistd\\.h;sys/fcntl\\.h"

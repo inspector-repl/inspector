@@ -1,22 +1,44 @@
-#include "inspector/common.h"
-#include "inspector/socket.h"
+#pragma once
 
-#include <json/json.h>
-#include <llvm/Support/raw_ostream.h>
-
-#define RCVBUFSIZE 10240
+#include <filesystem>
+#include <stdexcept>
+#include <string>
 
 namespace inspector {
+
+struct Reply {
+  std::string value;
+  bool error;
+};
+
+struct Disconnected : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+// $XDG_RUNTIME_DIR/inspector/sock, falling back to $TMPDIR (macOS) or /tmp.
+auto socketPath() -> std::filesystem::path;
+
+// NUL-delimited JSON messages over the REPL's Unix socket.
 class Prompt {
-  UnixSocket &socket;
-  std::string getJsonInspectorLocation(std::string filePath,
-                                       unsigned lineNumber);
-  std::string getJsonValue(std::string value);
+  int fd;
+  std::string pending; // bytes received after the last NUL delimiter
+  void send(const std::string &json) const;
 
 public:
-  Prompt(UnixSocket &socket);
-  void sendInspectorLocation(std::string path, unsigned lineNumber);
-  void sendResult(std::string value);
-  std::string getCppStatement();
+  // Throws Disconnected if no REPL is listening.
+  explicit Prompt(const std::filesystem::path &path);
+  ~Prompt();
+  Prompt(const Prompt &) = delete;
+  auto operator=(const Prompt &) -> Prompt & = delete;
+  Prompt(Prompt &&) = delete;
+  auto operator=(Prompt &&) -> Prompt & = delete;
+
+  void sendInspectorLocation(const std::string &path, unsigned lineNumber,
+                             const std::string &locals) const;
+  void sendReady(const Reply &startup) const;
+  void sendResult(const Reply &reply) const;
+  // Throws Disconnected when the REPL hangs up.
+  auto getCppStatement() -> std::string;
 };
+
 } // namespace inspector

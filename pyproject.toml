@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 inspector = "inspector:main"
+"inspector-c++" = "inspector.wrap:cxx_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["python/inspector"]

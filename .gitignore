@@ -58,10 +58,8 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-/test
-cmake*
-Makefile
+cmake-build-*
 *.pyc
 .*.swp
 python/inspector/config.py
-result
+result*
