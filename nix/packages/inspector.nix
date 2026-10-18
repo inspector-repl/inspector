@@ -69,4 +69,6 @@ stdenv.mkDerivation {
   postFixup = ''
     wrapPythonPrograms
   '';
+
+  meta.mainProgram = "inspector";
 }

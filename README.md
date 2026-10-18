@@ -1,13 +1,13 @@
 # Inspector - A drop-anywhere C++ REPL
 
-Allows to inject a fully-functional C++17 REPL into running, compiled programs
+Inspector injects a fully-functional C++17 REPL into running, compiled programs
 that can access your program state and offers features like code-completion and
 syntax highlighting.
 
 The API is similar to tools like [Pry](http://pryrepl.org/) in Ruby or
 [Pdb](https://docs.python.org/3/library/pdb.html) in Python:
 
-Example program:
+Drop `#include INSPECTOR` anywhere inside a function:
 
 ```c++
 // save as main.cpp
@@ -24,9 +24,9 @@ int main(int argc, char** argv) {
 ```
 
 ```console
-$ inspector repl &
-$ inspector-c++ main.cpp -o main
-$ ./main
+$ inspector-c++ -std=c++17 main.cpp -o main
+$ inspector repl      # terminal 1: waits for programs to connect
+$ ./main              # terminal 2: stops at each INSPECTOR and hands over
 ```
 
 ![Inspector example session](https://i.imgur.com/D7MQrDU.png "Inspector")
@@ -37,27 +37,51 @@ $ ./main
 
 [Cppcast about Inspector](http://cppcast.com/2018/02/mathieu-ropert/)
 
+## How it works
+
+1. At build time, `inspector` parses each source file with libclang. For every
+   `#include INSPECTOR` it writes a small header that captures the addresses
+   of all local variables in scope.
+2. At runtime the program calls into `libinspector`, which connects to
+   `inspector repl` over a Unix socket. It then starts clang-repl
+   (`clang::Interpreter`) with references to those variables.
+3. Typing `.quit` resumes the program.
+
 ## Build
 
-Requirements: a released LLVM/Clang **>= 22** (with its CMake package),
-jsoncpp, pkg-config, python3 with prompt-toolkit, pygments, libclang and
-hatchling. Distro packages (apt.llvm.org, Homebrew, Arch, nixpkgs) are enough;
-no LLVM source tree is needed.
+Requirements:
+
+- LLVM/Clang **>= 22** including its CMake package (`ClangConfig.cmake`).
+  Released distro packages work (apt.llvm.org, Homebrew, Arch, nixpkgs); no
+  LLVM source tree or fork is needed.
+- jsoncpp, pkg-config, CMake >= 3.20, ninja
+- python3 with prompt-toolkit, pygments, libclang and hatchling
 
 ```console
-$ nix develop        # or install the deps above
-$ cmake -B build -GNinja && ninja -C build && ctest --test-dir build
+$ cmake -B build -GNinja
+$ ninja -C build
+$ ctest --test-dir build      # end-to-end test, no tty needed
 ```
 
-Or with Nix: `nix build` / `nix run .#inspector -- repl`.
+The binaries end up in `build/inspector` and `build/inspector-c++`.
+
+If CMake can't find the clang executable, it can't detect the clang resource
+dir (builtin headers). Pass it explicitly:
+`-DCLANG_RESOURCE_DIR=$(clang -print-resource-dir)`.
+
+### Nix
+
+```console
+$ nix build                   # package, uses llvmPackages_latest
+$ nix run . -- repl
+$ nix develop                 # dev shell with all dependencies
+$ nix build .#checks.x86_64-linux.example-cmake   # make / meson / package-llvm22
+```
 
 ## Usage
 
-Start the REPL server in one terminal, then run your instrumented program:
-
-```console
-$ inspector repl
-```
+Run `inspector repl` in one terminal, then start your instrumented program
+in another. Pick whichever integration fits your build:
 
 ### Any build system: compiler wrapper
 
@@ -71,13 +95,27 @@ $ CXX=inspector-c++ meson setup build            # meson
 $ inspector wrap g++ -std=c++17 main.cpp -o main # explicit
 ```
 
+Environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `INSPECTOR_CXX` | real compiler used by `inspector-c++` (default `c++`) |
+| `INSPECTOR_INCLUDE_DIR` | where generated headers go (default `./.inspector-includes`) |
+| `INSPECTOR_SCAN_ALL` | parse every file, not only those containing `INSPECTOR` |
+| `INSPECTOR_NO_LINK` | don't add `-linspector` when linking |
+
 ### CMake
 
 ```cmake
 find_package(inspector REQUIRED)
 add_executable(app main.cpp)
-inspector_enable(app)
+inspector_enable(app)   # wraps compiles of `app`, links inspector::inspector
 ```
+
+### pkg-config
+
+`pkg-config --cflags --libs inspector` provides the include and link flags.
+Generating the headers still needs `inspector-c++` or `inspector prebuild`.
 
 ### Manual / compile_commands.json
 
@@ -88,6 +126,14 @@ $ c++ $(inspector print-cflags) main.cpp -o main
 ```
 
 See `examples/` for working setups; they run as `nix flake check` tests.
+
+## Limitations
+
+- C++ only.
+- The quick pre-scan only looks at the source file itself. If
+  `#include INSPECTOR` sits in a header, set `INSPECTOR_SCAN_ALL=1`.
+- The REPL server must already be running when the program reaches
+  `INSPECTOR`, otherwise the program exits with a socket error.
 
 ## TODO
 

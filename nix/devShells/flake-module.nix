@@ -48,9 +48,7 @@
               shellHook = ''
                 echo "Inspector development environment"
                 echo "To build:"
-                echo "  mkdir -p build && cd build"
-                echo "  cmake -GNinja .."
-                echo "  make"
+                echo "  cmake -B build -GNinja && ninja -C build && ctest --test-dir build"
               '';
             };
       };
