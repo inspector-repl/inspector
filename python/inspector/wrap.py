@@ -78,6 +78,8 @@ def wrapped_argv(compiler: str, args: list[str]) -> list[str]:
             f"-I{outdir}",
             f"-I{INCLUDE_PATH}",
             "-DINSPECTOR=<inspector/__FILE__-__LINE__>",
+            "-include",
+            "inspector/repl.h",
         ]
     # CMake links via its own rule (inspector_enable adds the library).
     link = not split.compile_only and not os.environ.get("INSPECTOR_NO_LINK")

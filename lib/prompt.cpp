@@ -1,15 +1,24 @@
 #include "inspector/prompt.h"
 
-#include <json/json.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/JSON.h>
+#include <llvm/Support/raw_ostream.h>
 
+#include <array>
 #include <cerrno>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <sstream>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <utility>
 
 using namespace inspector;
 
@@ -17,96 +26,110 @@ using namespace inspector;
 #define MSG_NOSIGNAL 0 // SO_NOSIGPIPE is used instead
 #endif
 
-std::filesystem::path inspector::socketPath() {
+namespace {
+
+auto sysError(const std::string &what) -> Disconnected {
+  // NOLINTNEXTLINE(concurrency-mt-unsafe): message only, races are harmless
+  return Disconnected{what + ": " + strerror(errno)};
+}
+
+auto toJson(llvm::json::Object message) -> std::string {
+  std::string out;
+  llvm::raw_string_ostream stream(out);
+  stream << llvm::json::Value(std::move(message));
+  return out;
+}
+
+} // namespace
+
+auto inspector::socketPath() -> std::filesystem::path {
+  // NOLINTBEGIN(concurrency-mt-unsafe): nothing modifies the environment
   const char *dir = getenv("XDG_RUNTIME_DIR");
-  if (!dir)
+  if (dir == nullptr) {
     dir = getenv("TMPDIR");
-  return std::filesystem::path(dir ? dir : "/tmp") / "inspector" / "sock";
+  }
+  // NOLINTEND(concurrency-mt-unsafe)
+  return std::filesystem::path(dir != nullptr ? dir : "/tmp") / "inspector" /
+         "sock";
 }
 
-static Disconnected sysError(const std::string &what) {
-  return Disconnected(what + ": " + strerror(errno));
-}
-
-Prompt::Prompt(const std::filesystem::path &path) {
-  sockaddr_un addr{};
-  addr.sun_family = AF_UNIX;
-  if (path.native().size() >= sizeof(addr.sun_path))
-    throw Disconnected("socket path too long: " + path.native());
-  strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
-
-  fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (fd < 0)
+Prompt::Prompt(const std::filesystem::path &path)
+    : fd(socket(AF_UNIX, SOCK_STREAM, 0)) {
+  if (fd < 0) {
     throw sysError("socket");
-  fcntl(fd, F_SETFD, FD_CLOEXEC);
+  }
+  fcntl(fd, F_SETFD, FD_CLOEXEC); // NOLINT(cppcoreguidelines-pro-type-vararg)
 #ifdef SO_NOSIGPIPE
   int one = 1;
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
 #endif
-  if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
-    auto err = sysError("connect " + path.native());
+
+  sockaddr_un addr{};
+  addr.sun_family = AF_UNIX;
+  const std::string &native = path.native();
+  if (native.size() >= sizeof(addr.sun_path)) {
     close(fd);
-    throw err;
+    throw Disconnected{"socket path too long: " + native};
+  }
+  native.copy(std::data(addr.sun_path), native.size());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): sockaddr API
+  if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
+    const int savedErrno = errno;
+    close(fd);
+    errno = savedErrno;
+    throw sysError("connect " + native);
   }
 }
 
 Prompt::~Prompt() { close(fd); }
 
-void Prompt::send(const std::string &json) {
+void Prompt::send(const std::string &json) const {
   // Include the trailing NUL as message delimiter.
-  const char *p = json.c_str();
-  size_t left = json.size() + 1;
-  while (left > 0) {
-    ssize_t n = ::send(fd, p, left, MSG_NOSIGNAL);
-    if (n <= 0)
+  std::string_view left(json.c_str(), json.size() + 1);
+  while (!left.empty()) {
+    const ssize_t sent = ::send(fd, left.data(), left.size(), MSG_NOSIGNAL);
+    if (sent <= 0) {
       throw sysError("send");
-    p += n;
-    left -= n;
+    }
+    left.remove_prefix(static_cast<size_t>(sent));
   }
-}
-
-static std::string toJson(const Json::Value &message) {
-  Json::StreamWriterBuilder builder;
-  builder["indentation"] = "";
-  return Json::writeString(builder, message);
 }
 
 void Prompt::sendInspectorLocation(const std::string &path, unsigned lineNumber,
-                                   const std::string &locals) {
-  Json::Value message;
-  message["file"] = path;
-  message["line"] = lineNumber;
-  message["locals"] = locals;
-  send(toJson(message));
+                                   const std::string &locals) const {
+  send(toJson(llvm::json::Object{
+      {"file", path}, {"line", lineNumber}, {"locals", locals}}));
 }
 
-void Prompt::sendReady(const Reply &startup) {
-  Json::Value message;
-  message["ready"] = true;
-  message["value"] = startup.value;
-  message["error"] = startup.error;
-  send(toJson(message));
+void Prompt::sendReady(const Reply &startup) const {
+  send(toJson(llvm::json::Object{
+      {"ready", true}, {"value", startup.value}, {"error", startup.error}}));
 }
 
-void Prompt::sendResult(const Reply &reply) {
-  Json::Value message;
-  message["value"] = reply.value;
-  message["error"] = reply.error;
-  send(toJson(message));
+void Prompt::sendResult(const Reply &reply) const {
+  send(toJson(
+      llvm::json::Object{{"value", reply.value}, {"error", reply.error}}));
 }
 
-std::string Prompt::getCppStatement() {
-  size_t end;
+auto Prompt::getCppStatement() -> std::string {
+  constexpr size_t chunkSize = 4096;
+  size_t end = 0;
   while ((end = pending.find('\0')) == std::string::npos) {
-    char buf[4096];
-    ssize_t n = recv(fd, buf, sizeof(buf), 0);
-    if (n <= 0)
-      throw Disconnected("connection closed");
-    pending.append(buf, n);
+    std::array<char, chunkSize> buf{};
+    const ssize_t received = recv(fd, buf.data(), buf.size(), 0);
+    if (received <= 0) {
+      throw Disconnected{"connection closed"};
+    }
+    pending.append(buf.data(), static_cast<size_t>(received));
   }
-  std::stringstream ss(pending.substr(0, end));
+  auto message = llvm::json::parse(pending.substr(0, end));
   pending.erase(0, end + 1);
-  Json::Value message;
-  ss >> message;
-  return message["input"].asString();
+  if (!message) {
+    throw Disconnected{"invalid message: " +
+                       llvm::toString(message.takeError())};
+  }
+  const auto *object = message->getAsObject();
+  const auto input =
+      object != nullptr ? object->getString("input") : std::nullopt;
+  return input.value_or("").str();
 }

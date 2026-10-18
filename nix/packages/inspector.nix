@@ -1,11 +1,8 @@
 {
   stdenv,
-  pkgs,
   lib,
   cmake,
   ninja,
-  pkg-config,
-  jsoncpp,
   llvmPackages,
   llvm,
   python3,
@@ -20,6 +17,7 @@ stdenv.mkDerivation {
     root = ../..;
     fileset = lib.fileset.unions [
       ../../CMakeLists.txt
+      ../../.clang-tidy
       ../../cmake
       ../../pyproject.toml
       ../../include
@@ -32,7 +30,6 @@ stdenv.mkDerivation {
   nativeBuildInputs = [
     cmake
     ninja
-    pkg-config
     (python3.withPackages (ps: [
       ps.hatchling
       ps.pip
@@ -41,11 +38,9 @@ stdenv.mkDerivation {
       ps.pygments
     ]))
     python3.pkgs.wrapPython
-    (lib.hiPrio pkgs.buildPackages.clang-tools)
   ];
 
   buildInputs = [
-    jsoncpp
     llvmPackages.clang-unwrapped.dev
     llvmPackages.clang-unwrapped.lib
     llvm.dev

@@ -30,7 +30,7 @@ endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(inspector PRIVATE ${_clang_libs} ${_llvm_libs}
-                                        PkgConfig::JSONCPP Threads::Threads)
+                                        Threads::Threads)
 
 install(
   TARGETS inspector

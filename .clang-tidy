@@ -1,0 +1,30 @@
+# Everything except vendor style guides (mostly aliases of other checks or
+# rules specific to those projects) and:
+#  - portability-avoid-pragma-once: all supported compilers handle #pragma once
+#  - readability-trailing-comma: contradicts itself on nested initializers
+Checks: >
+  *,
+  -portability-avoid-pragma-once,
+  -readability-trailing-comma,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -darwin-*,
+  -fuchsia-*,
+  -google-*,
+  -hicpp-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -objc-*,
+  -zircon-*
+
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/include/inspector/.*\.h$'
+FormatStyle: none
+# Do not lint LLVM/jsoncpp headers pulled in from the store.
+ExcludeHeaderFilterRegex: '.*/nix/store/.*'
+CheckOptions:
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: true

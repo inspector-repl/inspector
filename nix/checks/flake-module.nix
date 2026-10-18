@@ -47,6 +47,20 @@
           ninja -C build
           mv build/example example-bin
         '';
+        # Same clang as clang-tidy so compile_commands carry flags it understands.
+        clang-tidy = inspector.overrideAttrs (old: {
+          pname = "inspector-clang-tidy";
+          nativeBuildInputs = old.nativeBuildInputs ++ [ llvmPackages.clang-tools ];
+          cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            "-DBUILD_TESTING=ON"
+          ];
+          # run-clang-tidy has a /usr/bin/env shebang, unavailable in the sandbox.
+          buildPhase = "python3 $(command -v run-clang-tidy) -quiet -p .";
+          installPhase = "touch $out";
+          doCheck = false;
+          dontFixup = true;
+        });
         package-llvm22 = inspector.override {
           llvmPackages = pkgs.llvmPackages_22;
           llvm = pkgs.llvmPackages_22.llvm;

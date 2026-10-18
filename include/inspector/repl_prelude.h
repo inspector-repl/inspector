@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace __inspector {
+namespace inspector_repl {
 
 template <typename T, typename = void>
 struct is_streamable : std::false_type {};
@@ -32,74 +32,76 @@ struct is_pair<T, std::void_t<decltype(std::declval<T>().first),
                               decltype(std::declval<T>().second)>>
     : std::true_type {};
 
-inline void quote(std::ostream &os, std::string_view s) {
-  os << '"';
-  for (char c : s) {
-    switch (c) {
+inline void quote(std::ostream &out, std::string_view text) {
+  out << '"';
+  for (const char chr : text) {
+    switch (chr) {
     case '"':
-      os << "\\\"";
+      out << "\\\"";
       break;
     case '\\':
-      os << "\\\\";
+      out << "\\\\";
       break;
     case '\n':
-      os << "\\n";
+      out << "\\n";
       break;
     case '\t':
-      os << "\\t";
+      out << "\\t";
       break;
     default:
-      os << c;
+      out << chr;
     }
   }
-  os << '"';
+  out << '"';
 }
 
 // Long containers get truncated so a stray `bigVector` doesn't flood the REPL.
 constexpr std::size_t max_elements = 100;
 
-template <typename T> void show(std::ostream &os, const T &v) {
+template <typename T> void show(std::ostream &out, const T &value) {
   using U = std::decay_t<T>;
   if constexpr (std::is_same_v<U, std::string> ||
                 std::is_same_v<U, std::string_view>) {
-    quote(os, v);
+    quote(out, value);
   } else if constexpr (std::is_same_v<U, const char *> ||
                        std::is_same_v<U, char *>) {
-    if (v)
-      quote(os, v);
-    else
-      os << "nullptr";
+    if (value != nullptr) {
+      quote(out, value);
+    } else {
+      out << "nullptr";
+    }
   } else if constexpr (is_pair<U>::value) {
-    os << '{';
-    show(os, v.first);
-    os << ", ";
-    show(os, v.second);
-    os << '}';
+    out << '{';
+    show(out, value.first);
+    out << ", ";
+    show(out, value.second);
+    out << '}';
   } else if constexpr (is_iterable<U>::value) {
-    os << '{';
-    std::size_t n = 0;
-    for (const auto &e : v) {
-      if (n)
-        os << ", ";
-      if (n == max_elements) {
-        os << "...";
+    out << '{';
+    std::size_t count = 0;
+    for (const auto &element : value) {
+      if (count != 0) {
+        out << ", ";
+      }
+      if (count == max_elements) {
+        out << "...";
         break;
       }
-      show(os, e);
-      ++n;
+      show(out, element);
+      ++count;
     }
-    os << '}';
+    out << '}';
   } else if constexpr (is_streamable<U>::value) {
-    os << v;
+    out << value;
   } else {
-    os << "@" << static_cast<const void *>(&v);
+    out << "@" << static_cast<const void *>(&value);
   }
 }
 
-template <typename T> void print(std::string &out, const T &v) {
-  std::ostringstream os;
-  show(os, v);
-  out = os.str();
+template <typename T> void print(std::string &result, const T &value) {
+  std::ostringstream out;
+  show(out, value);
+  result = out.str();
 }
 
-} // namespace __inspector
+} // namespace inspector_repl

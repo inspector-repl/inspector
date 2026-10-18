@@ -15,11 +15,7 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-option(INSPECTOR_ENABLE_CLANG_TIDY "Run clang-tidy during the build" OFF)
-
-find_package(PkgConfig REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-pkg_check_modules(JSONCPP REQUIRED IMPORTED_TARGET jsoncpp)
 
 # ClangConfig pulls in LLVMConfig, so any packaged LLVM >= 22 works (distro
 # packages, nixpkgs, Homebrew, apt.llvm.org); no source tree is needed.
@@ -56,12 +52,6 @@ if(NOT CLANG_RESOURCE_DIR)
     FATAL_ERROR "Could not detect clang resource dir, set -DCLANG_RESOURCE_DIR")
 endif()
 message(STATUS "Using clang resource dir ${CLANG_RESOURCE_DIR}")
-
-if(INSPECTOR_ENABLE_CLANG_TIDY)
-  find_program(CLANG_TIDY_EXE NAMES clang-tidy REQUIRED)
-  set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}"
-                           "-header-filter=^${CMAKE_CURRENT_SOURCE_DIR}/.*")
-endif()
 
 add_subdirectory(lib)
 add_subdirectory(python)

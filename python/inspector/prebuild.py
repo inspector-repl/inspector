@@ -77,19 +77,19 @@ INSPECTOR_VARIABLES_TEMPLATE = """{type}& {name} = *({type}*) %p;"""
 INSPECTOR_HEADER_TEMPLATE = """
 #ifndef INSIDE_CLING /* yo dawg, I heard you like repls */
 {{
-    static const char* __inspector_includes[] = {{
+    static const char* const __inspector_includes[] = {{
         {includes}
-        NULL
+        0
     }};
-
-    void inspectorRunRepl(const char* path, unsigned lineNumber, const char* clingDeclare, const char* clingContext, const char* const* clingIncludes, ...);
+    const void* const __inspector_addresses[] = {{ {pointerlist} }};
+    /* C linkage comes from <inspector/repl.h>, force-included by the build. */
     inspectorRunRepl(
         /* file         */ "{file}",
         /* line         */  {line},
         /* declare      */ "{declare}",
         /* prelude      */ "{prelude}",
         /* includes     */ __inspector_includes,
-        /* pointerlist  */  {pointerlist}
+        /* addresses    */ __inspector_addresses
     );
 }}
 #endif
@@ -115,7 +115,7 @@ def write_header(
                 type=node.type.spelling, name=node.spelling
             )
         )
-        pointerlist.append(f"&{node.spelling}")
+        pointerlist.append(f"(const void*) &{node.spelling}")
     declare = "\n".join(
         [
             "#define INSIDE_CLING 1",

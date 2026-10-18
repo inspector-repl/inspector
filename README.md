@@ -54,7 +54,7 @@ Requirements:
 - LLVM/Clang **>= 22** including its CMake package (`ClangConfig.cmake`).
   Released distro packages work (apt.llvm.org, Homebrew, Arch, nixpkgs); no
   LLVM source tree or fork is needed.
-- jsoncpp, pkg-config, CMake >= 3.20, ninja
+- CMake >= 3.20, ninja
 - python3 with prompt-toolkit, pygments, libclang and hatchling
 
 ```console
@@ -76,6 +76,7 @@ $ nix build                   # package, uses llvmPackages_latest
 $ nix run . -- repl
 $ nix develop                 # dev shell with all dependencies
 $ nix build .#checks.x86_64-linux.example-cmake   # make / meson / package-llvm22
+$ nix build .#checks.x86_64-linux.clang-tidy      # or: run-clang-tidy -p build
 ```
 
 ## Usage

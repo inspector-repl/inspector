@@ -1,5 +1,6 @@
-add_executable(run_repl run_repl.cpp)
-target_link_libraries(run_repl inspector)
+add_executable(prelude prelude.cpp)
+target_include_directories(prelude PRIVATE ${PROJECT_SOURCE_DIR}/include)
+add_test(NAME prelude COMMAND prelude)
 
 # Same path users take with make/autotools/meson: CXX=inspector-c++.
 set(_e2e_bin ${CMAKE_CURRENT_BINARY_DIR}/test-proc)

@@ -25,7 +25,6 @@
               buildInputs =
                 with pkgs;
                 [
-                  jsoncpp
                   zlib
                   llvmPackages.clang-unwrapped.dev
                   llvmPackages.clang-unwrapped.lib
@@ -41,8 +40,7 @@
               nativeBuildInputs = with pkgs; [
                 cmake
                 ninja
-                pkg-config
-                (lib.hiPrio pkgs.buildPackages.clang-tools)
+                (lib.hiPrio llvmPackages.clang-tools)
               ];
 
               shellHook = ''
