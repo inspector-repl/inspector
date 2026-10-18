@@ -1,7 +1,9 @@
 import re
-from subprocess import Popen, PIPE
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Any
+from subprocess import PIPE, Popen
+from typing import Any
+
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 
@@ -23,14 +25,14 @@ class ClangCompleter(Completer):
             "-Xclang",
             "-code-completion-macros",
             "-Xclang",
-            "-code-completion-at=-:%d:%d" % (self.line, column),
+            f"-code-completion-at=-:{self.line}:{column}",
             "-x",
             "c++",
             "-",
         ]
         p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         compilation_unit = "".join(self.content).encode("utf-8")
-        stdout, stderr = p.communicate(compilation_unit)
+        stdout, _ = p.communicate(compilation_unit)
         lines = stdout.split(b"\n")
         symbols = []
         for line in lines:

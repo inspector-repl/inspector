@@ -24,9 +24,8 @@ int main(int argc, char** argv) {
 ```
 
 ```console
-$ ./inspector prebuild main.cpp 
-$ clang++ $(./inspector print-cflags) main.cpp -o main 
-$ ./inspector repl
+$ inspector repl &
+$ inspector-c++ main.cpp -o main
 $ ./main
 ```
 
@@ -40,88 +39,59 @@ $ ./main
 
 ## Build
 
-### Requirements
+Requirements: a released LLVM/Clang **>= 22** (with its CMake package),
+jsoncpp, pkg-config, python3 with prompt-toolkit, pygments, libclang and
+hatchling. Distro packages (apt.llvm.org, Homebrew, Arch, nixpkgs) are enough;
+no LLVM source tree is needed.
 
-- a c++ compiler (gcc or clang++)
-- LLVM/Clang 22+ with clang-repl (unreleased as of August 23, 2025)
-- jsoncpp
-- python3
-- python-prompt-toolkit (for python3)
-- python-pygments (for python3)
-- python-libclang (for python3)
-- python-hatchling (for building the Python package)
-- pkg-config
-- ninja (build system)
-
-### Using Nix
-
-The easiest way to get all dependencies is using the Nix flake:
-
-```bash
-nix develop
+```console
+$ nix develop        # or install the deps above
+$ cmake -B build -GNinja && ninja -C build && ctest --test-dir build
 ```
 
-### Manual Installation
-
-You need LLVM/Clang 22 or later with clang-repl support. As LLVM 22 is unreleased (as of August 23, 2025), you'll need to build from source or use the development version.
-
-Building LLVM from source:
-```bash
-git clone https://github.com/llvm/llvm-project.git
-cd llvm-project
-cmake -S llvm -B build -G Ninja \
-  -DLLVM_ENABLE_PROJECTS="clang" \
-  -DCLANG_ENABLE_CLANG_REPL=ON \
-  -DCMAKE_BUILD_TYPE=Release
-ninja -C build
-```
-
-Note: Package managers will provide LLVM 22 packages once it's officially released.
-
-### Build Inspector
-
-```bash
-git clone git@github.com:inspector-repl/inspector.git
-cd inspector
-mkdir build
-cd build
-cmake -GNinja .. -DCLANG_LIBDIR=<path-to-llvm>/lib
-ninja
-```
-
-Note: The `-DCLANG_LIBDIR` flag should point to the lib directory of your LLVM/Clang installation. For example:
-- If built from source: `-DCLANG_LIBDIR=/path/to/llvm-project/build/lib`
-- If installed system-wide: `-DCLANG_LIBDIR=/usr/lib/llvm-22/lib`
+Or with Nix: `nix build` / `nix run .#inspector -- repl`.
 
 ## Usage
 
+Start the REPL server in one terminal, then run your instrumented program:
+
+```console
+$ inspector repl
 ```
-# bring python bindings
-# (requires clang with clang-repl support, LLVM 22+ required)
-# and libclang into path
-export PYTHONPATH=$(readlink -f <llvm-root>/src/tools/clang/bindings/python/)
-export LD_LIBRARY_PATH=$(readlink -f <llvm-repo>/inst/lib)
-cd build
-./inspector prebuild ../test/test.cpp
-gcc -o test-proc $(./inspector print-cflags) ../test/test.cpp
-# start repl cli
-./inspector repl
-# let program connect to repl
-./test-proc
+
+### Any build system: compiler wrapper
+
+`inspector-c++` wraps the real compiler (`$INSPECTOR_CXX`, default `c++`).
+It generates the headers for `#include INSPECTOR` on the fly and links
+`libinspector`:
+
+```console
+$ make CXX=inspector-c++                         # make / autotools
+$ CXX=inspector-c++ meson setup build            # meson
+$ inspector wrap g++ -std=c++17 main.cpp -o main # explicit
 ```
+
+### CMake
+
+```cmake
+find_package(inspector REQUIRED)
+add_executable(app main.cpp)
+inspector_enable(app)
+```
+
+### Manual / compile_commands.json
+
+```console
+$ inspector prebuild main.cpp --cflags "-std=c++17 -Iinclude"
+$ inspector prebuild -p build/compile_commands.json -j8   # parallel
+$ c++ $(inspector print-cflags) main.cpp -o main
+```
+
+See `examples/` for working setups; they run as `nix flake check` tests.
 
 ## TODO
 
-- [ ] buildsystem integration:
-  - [ ] cmake
-  - [ ] autotools
-  - [ ] make
-  - [ ] meson
-- [ ] include type declaration into the repl
-- [ ] search for '#include INSPECTOR' before parsing (speed)
-- [ ] use verbose mode of compiler to get additional include paths for clang-repl /
-      libclang parsing
-- [ ] multiprocessing scanning
-- [ ] GDB/LLDB plugin: link/preload libinspector.so and invoke inspector with debug information from gdb/lldb. 
-- Support for more languages:
-   - [ ] C
+- [ ] include type declarations into the repl
+- [ ] GDB/LLDB plugin: preload libinspector.so and invoke inspector with debug
+      information from gdb/lldb
+- [ ] C support

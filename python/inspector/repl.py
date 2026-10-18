@@ -1,15 +1,15 @@
-#!/usr/bin/env python
-
 import json
 import socket
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
+
+import pygments
 from prompt_toolkit import prompt as prompt_tk
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.lexers import PygmentsLexer
-import pygments
-from pygments.lexers import CppLexer
 from pygments.formatters import TerminalFormatter
+from pygments.lexers import CppLexer
+
 from .clang_completer import ClangCompleter
 
 
@@ -37,17 +37,15 @@ class Repl:
         after = line_number + 4
         context = []
         try:
-            f = open(filename)
-
-            for i, line in enumerate(f):
-                if i >= before:
-                    context.append(line.rstrip())
-                if i > after:
-                    break
-            f.close()
-        except IOError:
+            with open(filename) as f:
+                for i, line in enumerate(f):
+                    if i >= before:
+                        context.append(line.rstrip())
+                    if i > after:
+                        break
+        except OSError:
             pass
-        banner = "From: {} @ line {} :\n".format(filename, line_number)
+        banner = f"From: {filename} @ line {line_number} :\n"
         if len(context) == 0:
             return banner
 
@@ -58,7 +56,7 @@ class Repl:
         for line in context:
             i += 1
             pointer = "-->" if i == line_number else "   "
-            banner += "{} {}: {}\n".format(pointer, i, line)
+            banner += f"{pointer} {i}: {line}\n"
         return banner
 
     def display_surrounding_code(self) -> None:
@@ -69,7 +67,7 @@ class Repl:
         history = InMemoryHistory()
         try:
             completer = ClangCompleter(Path(self.file_path), self.line_number)
-        except IOError:
+        except OSError:
             completer = None
         while True:
             prompt = self._prompt_string()
@@ -79,7 +77,7 @@ class Repl:
                 lexer=PygmentsLexer(CppLexer),
                 completer=completer,
             )
-            response = json.dumps(dict(input=answer), ensure_ascii=True)
+            response = json.dumps({"input": answer}, ensure_ascii=True)
             try:
                 self.output.sendall(response.encode("utf-8"))
                 self.output.sendall(b"\0")
@@ -95,6 +93,6 @@ class Repl:
             print(evaluation_result["value"])
 
     def _prompt_string(self) -> str:
-        prompt = "[%d] " % self.statement_count
+        prompt = f"[{self.statement_count}] "
         self.statement_count += 1
         return prompt

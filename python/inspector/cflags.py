@@ -1,10 +1,12 @@
 import argparse
-from .config import LIBRARY_PATH
+
+from .config import INCLUDE_PATH, LIBRARY_PATH
 
 INSPECTOR_MACRO = "-DINSPECTOR=<inspector/__FILE__-__LINE__>"
 
 
 def print_cflags(args: argparse.Namespace) -> None:
-    data = dict(macro=INSPECTOR_MACRO, library_path=LIBRARY_PATH)
-    template = "-I .inspector-includes {macro} -Wl,-rpath,{library_path} -L{library_path} -linspector"
-    print(template.format(**data))
+    print(
+        f"-I .inspector-includes -I{INCLUDE_PATH} {INSPECTOR_MACRO} "
+        f"-Wl,-rpath,{LIBRARY_PATH} -L{LIBRARY_PATH} -linspector"
+    )

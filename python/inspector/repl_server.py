@@ -1,10 +1,9 @@
-#!/usr/bin/env python
+import json
+import socket
+from collections.abc import Iterator
 
 from .repl import Repl
 from .socket_path import get_socket_directory
-import socket
-import json
-from typing import Iterator
 
 
 def read_message(io: socket.socket) -> Iterator[str]:
