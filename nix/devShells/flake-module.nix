@@ -29,7 +29,6 @@
                   llvmPackages.clang-unwrapped.dev
                   llvmPackages.clang-unwrapped.lib
                   llvmPackages.clang
-                  llvmPackages.lldb
                   llvm.dev
                   pythonEnv
                 ]
