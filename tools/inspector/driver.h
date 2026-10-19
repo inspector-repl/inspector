@@ -1,5 +1,7 @@
 #pragma once
 
+#include <llvm/ADT/StringRef.h>
+
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -45,6 +47,10 @@ auto splitCommand(const std::vector<std::string> &args) -> Split;
 auto replFlags(const std::vector<std::string> &flags,
                const std::filesystem::path &directory)
     -> std::vector<std::string>;
+
+// The include directories in `compiler -v` output, without the compiler's
+// own builtin headers. Clang uses its own, and GCC's need GCC builtins.
+auto parseIncludeSearch(llvm::StringRef verbose) -> std::vector<std::string>;
 
 // System include directories `compiler` uses (libstdc++, glibc, ...).
 auto compilerIncludePaths(const std::string &compiler)

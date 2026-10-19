@@ -160,20 +160,29 @@ auto compilerIncludePaths(const std::string &compiler)
   if (status != 0 || !output) {
     return {};
   }
-  llvm::StringRef text = (*output)->getBuffer();
-  text = text.split("#include <...> search starts here:\n").second;
-  text = text.split("End of search list.").first;
-  llvm::SmallVector<llvm::StringRef> lines;
-  text.split(lines, '\n', -1, /*KeepEmpty=*/false);
   std::vector<std::string> found;
-  for (llvm::StringRef line : lines) {
-    line = line.trim();
-    line.consume_back(" (framework directory)");
-    if (fs::is_directory(line.str())) {
-      found.push_back(line.str());
+  for (auto &dir : parseIncludeSearch((*output)->getBuffer())) {
+    if (fs::is_directory(dir)) {
+      found.push_back(std::move(dir));
     }
   }
   return found;
+}
+
+auto parseIncludeSearch(llvm::StringRef verbose) -> std::vector<std::string> {
+  verbose = verbose.split("#include <...> search starts here:\n").second;
+  verbose = verbose.split("End of search list.").first;
+  llvm::SmallVector<llvm::StringRef> lines;
+  verbose.split(lines, '\n', -1, /*KeepEmpty=*/false);
+  std::vector<std::string> dirs;
+  for (llvm::StringRef line : lines) {
+    line = line.trim();
+    line.consume_back(" (framework directory)");
+    if (!line.contains("/lib/gcc/") && !line.contains("/lib/clang/")) {
+      dirs.push_back(line.str());
+    }
+  }
+  return dirs;
 }
 
 auto wrappedArgv(const std::string &compiler,

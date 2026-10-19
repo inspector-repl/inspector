@@ -42,6 +42,24 @@ TEST(ReplFlags, MakesPathsAbsoluteAndKeepsMacros) {
                   "-std=c++20"));
 }
 
+// Clang brings its own builtin headers. GCC's use GCC-only builtins and
+// must not shadow them.
+TEST(IncludeSearch, DropsCompilerBuiltinDirectories) {
+  const std::string verbose =
+      "ignoring nonexistent directory \"/x\"\n"
+      "#include <...> search starts here:\n"
+      " /gcc/include/c++/15\n"
+      " /gcc/lib/gcc/x86_64-linux-gnu/15/include\n"
+      " /gcc/lib/gcc/x86_64-linux-gnu/15/include-fixed\n"
+      " /clang/lib/clang/21/include\n"
+      " /glibc/include\n"
+      " /System/Library/Frameworks (framework directory)\n"
+      "End of search list.\n";
+  EXPECT_THAT(inspector::driver::parseIncludeSearch(verbose),
+              ElementsAre("/gcc/include/c++/15", "/glibc/include",
+                          "/System/Library/Frameworks"));
+}
+
 // The source sits five directories above the compiler's working directory,
 // so __FILE__ in INSPECTOR starts with ../../../../../.
 TEST(Generate, KeepsHeadersOfParentDirectorySourcesInOutdir) {
