@@ -5,32 +5,32 @@
       inherit (pkgs) lib;
       inspector = self'.packages.default;
       llvmPackages = pkgs.llvmPackages_latest;
-      # One check per build-system integration. Builds against the freshly
-      # installed (and wrapped) package, then runs inspector-e2e from the
-      # build tree.
+      e2e = ../../test/e2e.py;
+      # One check per build-system integration, all running the same REPL test.
       mkExample =
         name: nativeBuildInputs: build:
-        inspector.overrideAttrs (old: {
-          pname = "inspector-example-${name}";
-          nativeBuildInputs = old.nativeBuildInputs ++ nativeBuildInputs;
-          # Keep doCheck so the tests are built (it sets BUILD_TESTING); the
-          # package check already runs them, so only note where the binary is.
-          checkPhase = "e2e=$PWD/test/inspector-e2e";
-          postFixup = old.postFixup + ''
-            cp -r ${../../examples} examples
-            chmod -R u+w examples
-            (
-              export PATH=$out/bin:$PATH INSPECTOR_CXX=$CXX
-              cd examples
-              ${build}
-            )
-            "$e2e" "$PWD/examples/${name}/example-bin"
+        llvmPackages.stdenv.mkDerivation {
+          name = "inspector-example-${name}";
+          src = ../../examples;
+          nativeBuildInputs = [
+            inspector
+            pkgs.python3
+          ]
+          ++ nativeBuildInputs;
+          dontConfigure = true;
+          buildPhase = ''
+            runHook preBuild
+            export INSPECTOR_CXX=$CXX
+            ${build}
+            python3 ${e2e} "$PWD/example-bin"
+            runHook postBuild
           '';
-        });
+          installPhase = "touch $out";
+        };
     in
     {
       checks = {
-        example-make = mkExample "make" [ pkgs.gnumake ] ''
+        example-make = mkExample "make" [ ] ''
           cd make
           make CXX=inspector-c++
           mv example example-bin

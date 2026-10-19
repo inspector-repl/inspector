@@ -7,7 +7,6 @@
   llvm,
   python3,
   libffi,
-  gtest,
 }:
 
 stdenv.mkDerivation {
@@ -45,7 +44,6 @@ stdenv.mkDerivation {
     llvmPackages.clang-unwrapped.dev
     llvmPackages.clang-unwrapped.lib
     llvm.dev
-    gtest
   ]
   ++ lib.optionals stdenv.hostPlatform.isDarwin [
     libffi

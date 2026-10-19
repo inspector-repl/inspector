@@ -1,8 +1,9 @@
 # Inspector - A drop-anywhere C++ REPL
 
-Inspector injects a fully-functional C++17 REPL into running, compiled programs
+Inspector injects a fully-functional C++ REPL into running, compiled programs
 that can access your program state and offers features like code-completion and
-syntax highlighting.
+syntax highlighting. The REPL uses the language standard and include paths the
+program was compiled with.
 
 The API is similar to tools like [Pry](http://pryrepl.org/) in Ruby or
 [Pdb](https://docs.python.org/3/library/pdb.html) in Python:
@@ -45,8 +46,8 @@ $ ./main              # terminal 2: stops at each INSPECTOR and hands over
 2. At runtime the program calls into `libinspector`, which connects to
    `inspector repl` (the `inspector-repl` binary) over a Unix socket. It then
    starts clang-repl (`clang::Interpreter`) with references to those
-   variables; the REPL sends input, completion requests and `.quit` back.
-3. Typing `.quit` resumes the program.
+   variables. Input and completion requests are evaluated inside the program.
+3. Typing `.continue` (or Ctrl-D) resumes the program.
 
 ## Build
 
@@ -57,6 +58,7 @@ Requirements:
   LLVM source tree or fork is needed.
 - CMake >= 3.20, ninja
 - python3 with libclang and hatchling (build-time instrumentation only)
+- GoogleTest, only with `BUILD_TESTING` (the default)
 
 The line editor, [replxx](https://github.com/ClickHouse/replxx), is vendored
 in `third_party/` on purpose: distributions ship the 2021 release, which
@@ -65,10 +67,12 @@ lacks the fork's paste, redraw and crash fixes.
 ```console
 $ cmake -B build -GNinja
 $ ninja -C build
-$ ctest --test-dir build      # end-to-end test, no tty needed
+$ ctest --test-dir build      # gtest suites, including a pty-driven REPL test
 ```
 
-The binaries end up in `build/inspector` and `build/inspector-c++`.
+The binaries end up in `build/inspector`, `build/inspector-c++` and
+`build/inspector-repl`. To run the end-to-end tests against another
+instrumented program: `build/test/inspector-e2e ./program`.
 
 If CMake can't find the clang executable, it can't detect the clang resource
 dir (builtin headers). Pass it explicitly:
@@ -110,7 +114,8 @@ error: use of undeclared identifier 'undefined'
 - `.locals`, `.where`, `.help`, `.abort`; `.continue` or Ctrl-D resumes the
   program. Ctrl-C clears the current line.
 - History is saved in `$XDG_STATE_HOME/inspector/history`.
-- The server keeps running between breakpoints and programs.
+- The REPL keeps running between breakpoints and programs; Ctrl-C while
+  waiting exits.
 
 ### Any build system: compiler wrapper
 
@@ -155,7 +160,8 @@ $ inspector prebuild -p build/compile_commands.json -j8   # parallel
 $ c++ $(inspector print-cflags) main.cpp -o main
 ```
 
-See `examples/` for working setups; they run as `nix flake check` tests.
+See `examples/` for working setups; `nix flake check` builds each one and runs
+`inspector-e2e` against it.
 
 ## Limitations
 

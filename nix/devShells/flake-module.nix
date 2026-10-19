@@ -24,7 +24,6 @@
                 with pkgs;
                 [
                   zlib
-                  gtest
                   llvmPackages.clang-unwrapped.dev
                   llvmPackages.clang-unwrapped.lib
                   llvmPackages.clang
