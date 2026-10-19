@@ -175,6 +175,36 @@ TEST_F(Session, ReportsExceptions) {
   EXPECT_THAT(ask("b.at(99)"), HasSubstr("uncaught exception"));
 }
 
+// Programs like nix reserve huge heaps (Boehm GC). JIT code linked after
+// that must still reach __dso_handle, which static destructors use.
+TEST_F(Session, LinksAcrossLargeMappings) {
+#ifndef __linux__
+  GTEST_SKIP() << "relies on Linux placing mappings top-down";
+#endif
+  EXPECT_EQ(ask("#include <sys/mman.h>"), "");
+  // Fill the gaps above the reservation so that later JIT allocations land
+  // 8 GiB below the earlier ones.
+  EXPECT_EQ(ask(R"(void reserveBelow() {
+    auto *heap = static_cast<char *>(mmap(nullptr, 1ULL << 33, PROT_NONE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0));
+    for (size_t size : {1UL << 30, 1UL << 20, 1UL << 12}) {
+      for (int i = 0; i < 100000; ++i) {
+        void *gap = mmap(nullptr, size, PROT_NONE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+        if (gap < heap) {
+          munmap(gap, size);
+          break;
+        }
+      }
+    }
+  })"),
+            "");
+  EXPECT_EQ(ask("reserveBelow();"), "");
+  EXPECT_EQ(ask("struct Dtor { ~Dtor() {} int v = 3; };"), "");
+  EXPECT_EQ(ask("int local() { static Dtor d; return d.v; }"), "");
+  EXPECT_THAT(ask("local()"), HasSubstr("3"));
+}
+
 // Without a listening REPL the program must keep running.
 TEST(NoListener, ProgramContinues) {
   const TempDir tmp;
