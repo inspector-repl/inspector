@@ -31,8 +31,9 @@ using testing::HasSubstr;
 
 namespace {
 
-auto paths() -> std::array<std::string, 2> & {
-  static std::array<std::string, 2> repl;
+// argv entries; std::string copies could throw before gtest takes over.
+auto paths() -> std::array<const char *, 2> & {
+  static std::array<const char *, 2> repl{};
   return repl;
 }
 
