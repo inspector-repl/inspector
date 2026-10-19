@@ -175,6 +175,25 @@ TEST_F(Session, ReportsExceptions) {
   EXPECT_THAT(ask("b.at(99)"), HasSubstr("uncaught exception"));
 }
 
+// A missing symbol fails every function of its module. Listing them all
+// buried the cause under thousands of mangled names.
+TEST_F(Session, ReportsOnlyMissingSymbols) {
+  constexpr int users = 50;
+  std::string decls = "int missing();";
+  for (int i = 0; i < users; ++i) {
+    decls += " int user" + std::to_string(i) + "() { return missing(); }";
+  }
+  EXPECT_EQ(ask(decls), "");
+  const std::string reply = ask("user0()");
+  EXPECT_THAT(reply, HasSubstr("_Z7missingv"));
+  EXPECT_THAT(reply, Not(HasSubstr("user4")));
+}
+
+TEST_F(Session, RecoversFromLinkErrors) {
+  EXPECT_THAT(ask("int absent(); absent()"), HasSubstr("_Z6absentv"));
+  EXPECT_THAT(ask("1 + 1"), HasSubstr("2"));
+}
+
 // Programs like nix reserve huge heaps (Boehm GC). JIT code linked after
 // that must still reach __dso_handle, which static destructors use.
 TEST_F(Session, LinksAcrossLargeMappings) {
@@ -203,21 +222,6 @@ TEST_F(Session, LinksAcrossLargeMappings) {
   EXPECT_EQ(ask("struct Dtor { ~Dtor() {} int v = 3; };"), "");
   EXPECT_EQ(ask("int local() { static Dtor d; return d.v; }"), "");
   EXPECT_THAT(ask("local()"), HasSubstr("3"));
-}
-
-// A missing symbol fails every function of its module. Listing them all
-// buried the cause under thousands of mangled names. Runs last: the failed
-// module poisons every later input.
-TEST_F(Session, ReportsOnlyMissingSymbols) {
-  constexpr int users = 50;
-  std::string decls = "int missing();";
-  for (int i = 0; i < users; ++i) {
-    decls += " int user" + std::to_string(i) + "() { return missing(); }";
-  }
-  EXPECT_EQ(ask(decls), "");
-  const std::string reply = ask("user0()");
-  EXPECT_THAT(reply, HasSubstr("_Z7missingv"));
-  EXPECT_THAT(reply, Not(HasSubstr("user4")));
 }
 
 // Without a listening REPL the program must keep running.

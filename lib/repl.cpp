@@ -137,14 +137,15 @@ class Session {
   DiagCapture diags;
   std::string printed; // written by inspector_repl::print inside the JIT
   std::string lastError;
-  std::string cause; // of the last JIT failure, retries don't repeat it
   bool threw = false;
+  bool linkFailed = false;
   std::string statements; // successful input, so completion sees its names
   unsigned counter = 0;
 
   auto run(const std::string &code, clang::Value *value = nullptr) -> bool {
     llvm::Error err = llvm::Error::success();
     threw = true;
+    linkFailed = false;
     try {
       err = interp.ParseAndExecute(code, value);
     } catch (const std::exception &e) {
@@ -156,18 +157,30 @@ class Session {
       return false;
     }
     threw = false;
-    if (err) {
-      // JIT link errors (e.g. missing symbols) don't go through diagnostics.
-      std::string causes = jitErrors.take();
-      if (!causes.empty()) {
-        cause = std::move(causes);
-      }
-      std::string full = llvm::toString(std::move(err));
-      lastError = cause.empty() ? std::move(full) : cause;
-      return false;
+    linkFailed = false;
+    if (!err) {
+      return true;
     }
-    cause.clear();
-    return true;
+    // JIT link errors (e.g. missing symbols) don't go through diagnostics.
+    const std::string cause = jitErrors.take();
+    // Undo leaves the initializer queued, a failing runCtors() drains it.
+    if (err.isA<llvm::orc::FailedToMaterialize>()) {
+      llvm::consumeError(interp.Undo());
+      if (auto engine = interp.getExecutionEngine()) {
+        llvm::consumeError(engine->runCtors());
+      } else {
+        llvm::consumeError(engine.takeError());
+      }
+      jitErrors.take();
+    }
+    linkFailed = true;
+    if (cause.empty()) {
+      lastError = llvm::toString(std::move(err));
+    } else {
+      llvm::consumeError(std::move(err));
+      lastError = cause;
+    }
+    return false;
   }
 
   auto failure() -> std::string {
@@ -266,7 +279,7 @@ public:
         return show(var);
       }
       // Re-running would repeat side effects that led up to the throw.
-      if (threw) {
+      if (threw || linkFailed) {
         return {lastError, true};
       }
     }
