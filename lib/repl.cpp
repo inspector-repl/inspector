@@ -12,6 +12,7 @@
 #include <clang/Interpreter/Interpreter.h>
 #include <clang/Interpreter/Value.h>
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/ExecutionEngine/Orc/Core.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
 #include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -29,6 +30,7 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -104,11 +106,38 @@ auto isRecord(const clang::Value &value) -> bool {
   return value.getType().getNonReferenceType()->isRecordType();
 }
 
+// ORC reports the root cause of a link failure (e.g. "Symbols not found")
+// only to the session's error reporter. The error returned to the caller
+// just lists every symbol that failed with it, often thousands.
+class JitErrors {
+  std::mutex mutex;
+  std::string causes;
+
+public:
+  void report(llvm::Error err) {
+    llvm::handleAllErrors(
+        std::move(err),
+        // Consequences of a cause reported on its own.
+        [](const llvm::orc::FailedToMaterialize &) -> void {},
+        [this](const llvm::ErrorInfoBase &info) -> void {
+          const std::scoped_lock lock(mutex);
+          causes += info.message() + "\n";
+        });
+  }
+
+  auto take() -> std::string {
+    const std::scoped_lock lock(mutex);
+    return std::exchange(causes, {});
+  }
+};
+
 class Session {
   clang::Interpreter &interp;
+  JitErrors &jitErrors;
   DiagCapture diags;
   std::string printed; // written by inspector_repl::print inside the JIT
   std::string lastError;
+  std::string cause; // of the last JIT failure, retries don't repeat it
   bool threw = false;
   std::string statements; // successful input, so completion sees its names
   unsigned counter = 0;
@@ -129,9 +158,15 @@ class Session {
     threw = false;
     if (err) {
       // JIT link errors (e.g. missing symbols) don't go through diagnostics.
-      lastError = llvm::toString(std::move(err));
+      std::string causes = jitErrors.take();
+      if (!causes.empty()) {
+        cause = std::move(causes);
+      }
+      std::string full = llvm::toString(std::move(err));
+      lastError = cause.empty() ? std::move(full) : cause;
       return false;
     }
+    cause.clear();
     return true;
   }
 
@@ -177,7 +212,8 @@ class Session {
   }
 
 public:
-  explicit Session(clang::Interpreter &interp) : interp(interp), diags(interp) {
+  Session(clang::Interpreter &interp, JitErrors &jitErrors)
+      : interp(interp), jitErrors(jitErrors), diags(interp) {
     run("#include <inspector/repl_prelude.h>\n"
         "static std::string &__inspector_out = *(std::string *)" +
         hexAddress(&printed) + ";");
@@ -258,7 +294,7 @@ public:
 // address ranges (e.g. Boehm GC in nix) later modules land gigabytes away
 // from earlier ones. That breaks 32-bit relocations to symbols the JIT
 // itself defines, like __dso_handle. A single slab keeps them close.
-auto executorBuilder()
+auto executorBuilder(JitErrors &jitErrors)
     -> llvm::Expected<std::unique_ptr<clang::IncrementalExecutorBuilder>> {
   auto target = llvm::orc::JITTargetMachineBuilder::detectHost();
   if (!target) {
@@ -266,11 +302,16 @@ auto executorBuilder()
   }
   auto jit = std::make_unique<llvm::orc::LLJITBuilder>();
   jit->setJITTargetMachineBuilder(std::move(*target));
-  jit->setPrePlatformSetup([](llvm::orc::LLJIT &lljit) -> llvm::Error {
-    // Lets gdb see JIT code, best effort as in clang.
-    llvm::consumeError(llvm::orc::enableDebuggerSupport(lljit));
-    return llvm::Error::success();
-  });
+  jit->setPrePlatformSetup(
+      [&jitErrors](llvm::orc::LLJIT &lljit) -> llvm::Error {
+        lljit.getExecutionSession().setErrorReporter(
+            [&jitErrors](llvm::Error err) -> void {
+              jitErrors.report(std::move(err));
+            });
+        // Lets gdb see JIT code, best effort as in clang.
+        llvm::consumeError(llvm::orc::enableDebuggerSupport(lljit));
+        return llvm::Error::success();
+      });
   // Address space only: pages are committed as modules are linked.
   constexpr std::size_t slab = std::size_t{1} << 30U;
   auto memory = llvm::orc::MapperJITLinkMemoryManager::CreateWithMapper<
@@ -311,7 +352,8 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
     prompt.sendReady({llvm::toString(compiler.takeError()), true});
     return;
   }
-  auto executor = executorBuilder();
+  JitErrors jitErrors;
+  auto executor = executorBuilder(jitErrors);
   if (!executor) {
     prompt.sendReady({llvm::toString(executor.takeError()), true});
     return;
@@ -323,7 +365,7 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
     return;
   }
 
-  Session session(**interp);
+  Session session(**interp, jitErrors);
   prompt.sendReady(session.setup(declare, context));
   // Built on the first completion request: the parse costs a few hundred ms.
   std::unique_ptr<Completer> completer;
