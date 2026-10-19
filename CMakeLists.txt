@@ -53,7 +53,24 @@ if(NOT CLANG_RESOURCE_DIR)
 endif()
 message(STATUS "Using clang resource dir ${CLANG_RESOURCE_DIR}")
 
+# Prefer the monolithic shared libraries (what distros ship); fall back to
+# component libraries for static-only LLVM builds.
+if(TARGET clang-cpp)
+  set(INSPECTOR_CLANG_LIBS clang-cpp)
+else()
+  set(INSPECTOR_CLANG_LIBS clangInterpreter clangFrontend clangLex clangBasic)
+endif()
+if(LLVM_LINK_LLVM_DYLIB)
+  list(APPEND INSPECTOR_CLANG_LIBS LLVM)
+else()
+  llvm_map_components_to_libnames(_llvm_libs ${LLVM_TARGETS_TO_BUILD} orcjit
+                                  support)
+  list(APPEND INSPECTOR_CLANG_LIBS ${_llvm_libs})
+endif()
+
+add_subdirectory(third_party/replxx)
 add_subdirectory(lib)
+add_subdirectory(tools/repl)
 add_subdirectory(python)
 
 include(CTest)

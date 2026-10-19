@@ -14,22 +14,8 @@ target_compile_definitions(
                     INSPECTOR_CLANG_RESOURCE_DIR="${CLANG_RESOURCE_DIR}")
 target_compile_options(inspector PRIVATE -Wall -Wextra)
 
-# Prefer the monolithic shared libraries (what distros ship); fall back to
-# component libraries for static-only LLVM builds.
-if(TARGET clang-cpp)
-  set(_clang_libs clang-cpp)
-else()
-  set(_clang_libs clangInterpreter clangFrontend clangBasic)
-endif()
-if(LLVM_LINK_LLVM_DYLIB)
-  set(_llvm_libs LLVM)
-else()
-  llvm_map_components_to_libnames(_llvm_libs ${LLVM_TARGETS_TO_BUILD} orcjit
-                                  support)
-endif()
-
 find_package(Threads REQUIRED)
-target_link_libraries(inspector PRIVATE ${_clang_libs} ${_llvm_libs}
+target_link_libraries(inspector PRIVATE ${INSPECTOR_CLANG_LIBS}
                                         Threads::Threads)
 
 install(
