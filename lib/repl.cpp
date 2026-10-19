@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -103,10 +104,24 @@ class Session {
   DiagCapture diags;
   std::string printed; // written by inspector_repl::print inside the JIT
   std::string lastError;
+  bool threw = false;
   unsigned counter = 0;
 
   auto run(const std::string &code, clang::Value *value = nullptr) -> bool {
-    if (auto err = interp.ParseAndExecute(code, value)) {
+    llvm::Error err = llvm::Error::success();
+    threw = true;
+    try {
+      err = interp.ParseAndExecute(code, value);
+    } catch (const std::exception &e) {
+      // An exception thrown by REPL code must not unwind into the program.
+      lastError = std::string("uncaught exception: ") + e.what();
+      return false;
+    } catch (...) {
+      lastError = "uncaught exception";
+      return false;
+    }
+    threw = false;
+    if (err) {
       // JIT link errors (e.g. missing symbols) don't go through diagnostics.
       lastError = llvm::toString(std::move(err));
       return false;
@@ -184,6 +199,10 @@ public:
       diags.clear();
       if (run("auto &&" + var + " = (" + input + ");")) {
         return show(var);
+      }
+      // Re-running would repeat side effects that led up to the throw.
+      if (threw) {
+        return {lastError, true};
       }
     }
     // Without ';' clang-repl parses a value-printing expression and silently
