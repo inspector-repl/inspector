@@ -205,6 +205,21 @@ TEST_F(Session, LinksAcrossLargeMappings) {
   EXPECT_THAT(ask("local()"), HasSubstr("3"));
 }
 
+// A missing symbol fails every function of its module. Listing them all
+// buried the cause under thousands of mangled names. Runs last: the failed
+// module poisons every later input.
+TEST_F(Session, ReportsOnlyMissingSymbols) {
+  constexpr int users = 50;
+  std::string decls = "int missing();";
+  for (int i = 0; i < users; ++i) {
+    decls += " int user" + std::to_string(i) + "() { return missing(); }";
+  }
+  EXPECT_EQ(ask(decls), "");
+  const std::string reply = ask("user0()");
+  EXPECT_THAT(reply, HasSubstr("_Z7missingv"));
+  EXPECT_THAT(reply, Not(HasSubstr("user4")));
+}
+
 // Without a listening REPL the program must keep running.
 TEST(NoListener, ProgramContinues) {
   const TempDir tmp;
