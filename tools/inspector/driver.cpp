@@ -6,7 +6,6 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Program.h>
 
@@ -49,10 +48,8 @@ constexpr std::array<std::string_view, 7> sourceSuffixes = {
 constexpr std::array<std::string_view, 6> replPathFlags = {
     "-isystem", "-idirafter", "-imacros", "-include", "-iquote", "-I"};
 
-template <size_t N>
-auto contains(const std::array<std::string_view, N> &list, std::string_view arg)
-    -> bool {
-  return std::find(list.begin(), list.end(), arg) != list.end();
+auto contains(const auto &list, std::string_view arg) -> bool {
+  return std::ranges::find(list, arg) != list.end();
 }
 
 auto absoluteIn(const fs::path &directory, llvm::StringRef path)
@@ -68,9 +65,9 @@ auto findPaths() -> Paths {
   // In the build tree the library sits in lib/ next to the binaries and
   // include/ links to the sources.
   if (fs::exists(dir / "lib" / INSPECTOR_LIBRARY_FILE)) {
-    return {dir / "lib", dir / "include"};
+    return {dir, dir / "lib", dir / "include"};
   }
-  return {(dir / INSPECTOR_REL_LIBDIR).lexically_normal(),
+  return {dir, (dir / INSPECTOR_REL_LIBDIR).lexically_normal(),
           (dir / INSPECTOR_REL_INCLUDEDIR).lexically_normal()};
 }
 
@@ -91,19 +88,23 @@ auto splitCommand(const std::vector<std::string> &args) -> Split {
   for (size_t i = 0; i < args.size(); ++i) {
     const std::string &arg = args.at(i);
     split.compileOnly |= contains(compileOnlyFlags, arg);
-    const bool hasValue = contains(argFlags, arg) && i + 1 < args.size();
-    if (!contains(dropped, arg) && (arg.front() == '-' || arg.front() == '@')) {
+    const bool isFlag = arg.front() == '-' || arg.front() == '@';
+    const bool keep = isFlag && !contains(dropped, arg);
+    if (keep) {
       split.flags.push_back(arg);
-      if (hasValue) {
-        split.flags.push_back(args.at(i + 1));
+    }
+    if (contains(argFlags, arg) && i + 1 < args.size()) {
+      const std::string &value = args.at(++i);
+      if (keep) {
+        split.flags.push_back(value);
       }
-    } else if (std::any_of(sourceSuffixes.begin(), sourceSuffixes.end(),
-                           [&](std::string_view suffix) -> bool {
-                             return llvm::StringRef(arg).ends_with(suffix);
-                           })) {
+    } else if (!isFlag &&
+               std::ranges::any_of(sourceSuffixes,
+                                   [&](std::string_view suffix) -> bool {
+                                     return arg.ends_with(suffix);
+                                   })) {
       split.sources.push_back(arg);
     }
-    i += hasValue ? 1 : 0;
   }
   return split;
 }
@@ -113,11 +114,10 @@ auto replFlags(const std::vector<std::string> &flags, const fs::path &directory)
   std::vector<std::string> out;
   for (size_t i = 0; i < flags.size(); ++i) {
     const llvm::StringRef flag = flags.at(i);
-    const auto *pathFlag =
-        std::find_if(replPathFlags.begin(), replPathFlags.end(),
-                     [&](std::string_view prefix) -> bool {
-                       return flag.starts_with(prefix);
-                     });
+    const auto *pathFlag = std::ranges::find_if(
+        replPathFlags, [&](std::string_view prefix) -> bool {
+          return flag.starts_with(prefix);
+        });
     const bool separate = contains(argFlags, flag) && i + 1 < flags.size();
     // The REPL runs in the program's working directory, not the compiler's.
     if (pathFlag != replPathFlags.end()) {
@@ -184,33 +184,37 @@ auto wrappedArgv(const std::string &compiler,
     const auto systemIncludes = compilerIncludePaths(compiler);
     const bool scanAll = !env("INSPECTOR_SCAN_ALL").empty();
     for (const auto &source : split.sources) {
-      prebuild::generate({fs::current_path(), source, split.flags, outdir,
-                          systemIncludes, scanAll});
+      prebuild::generate({.directory = fs::current_path(),
+                          .source = source,
+                          .flags = split.flags,
+                          .outdir = outdir,
+                          .systemIncludes = systemIncludes,
+                          .scanAll = scanAll});
     }
   }
   std::vector<std::string> argv = {compiler};
   if (!split.sources.empty()) {
-    argv.insert(argv.end(),
-                {"-I" + outdir.string(), "-I" + paths().include.string(),
-                 "-DINSPECTOR=<inspector/__FILE__-__LINE__>", "-include",
-                 "inspector/repl.h"});
+    const auto flags = compileFlags(outdir);
+    argv.insert(argv.end(), flags.begin(), flags.end());
   }
   argv.insert(argv.end(), args.begin(), args.end());
   // CMake links via its own rule (inspector_enable adds the library).
   if (!split.compileOnly && env("INSPECTOR_NO_LINK").empty()) {
-    const std::string lib = paths().library.string();
-    argv.insert(argv.end(), {"-L" + lib, "-Wl,-rpath," + lib, "-linspector"});
+    const auto flags = linkFlags();
+    argv.insert(argv.end(), flags.begin(), flags.end());
   }
   return argv;
 }
 
-auto cflags() -> std::string {
-  return llvm::formatv("-I {0} -I{1} -DINSPECTOR=<inspector/__FILE__-__LINE__> "
-                       "-include inspector/repl.h -Wl,-rpath,{2} -L{2} "
-                       "-linspector",
-                       defaultOutdir, paths().include.string(),
-                       paths().library.string())
-      .str();
+auto compileFlags(const fs::path &outdir) -> std::vector<std::string> {
+  return {"-I" + outdir.string(), "-I" + paths().include.string(),
+          "-DINSPECTOR=<inspector/__FILE__-__LINE__>", "-include",
+          "inspector/repl.h"};
+}
+
+auto linkFlags() -> std::vector<std::string> {
+  const std::string lib = paths().library.string();
+  return {"-L" + lib, "-Wl,-rpath," + lib, "-linspector"};
 }
 
 auto exec(const std::vector<std::string> &args) -> int {

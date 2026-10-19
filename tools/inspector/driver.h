@@ -12,6 +12,7 @@ constexpr const char *defaultOutdir = ".inspector-includes";
 
 // Where libinspector and its headers live, relative to the running binary.
 struct Paths {
+  std::filesystem::path binaries;
   std::filesystem::path library;
   std::filesystem::path include;
 };
@@ -45,7 +46,10 @@ auto wrappedArgv(const std::string &compiler,
                  const std::vector<std::string> &args)
     -> std::vector<std::string>;
 
-auto cflags() -> std::string;
+// Flags to compile with INSPECTOR support, and to link libinspector.
+auto compileFlags(const std::filesystem::path &outdir)
+    -> std::vector<std::string>;
+auto linkFlags() -> std::vector<std::string>;
 
 // Replaces the process with `args`; returns an exit code only on failure.
 auto exec(const std::vector<std::string> &args) -> int;

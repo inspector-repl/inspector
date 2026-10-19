@@ -6,6 +6,7 @@ Checks: >
   *,
   -portability-avoid-pragma-once,
   -readability-trailing-comma,
+  -modernize-use-designated-initializers,
   -abseil-*,
   -altera-*,
   -android-*,
