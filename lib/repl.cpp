@@ -1,4 +1,5 @@
 #include "inspector/repl.h"
+#include "compat.h"
 #include "completer.h"
 #include "inspector/prompt.h"
 
@@ -7,16 +8,22 @@
 #include <clang/Basic/DiagnosticOptions.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
+#include <clang/Interpreter/IncrementalExecutor.h>
 #include <clang/Interpreter/Interpreter.h>
 #include <clang/Interpreter/Value.h>
 #include <llvm/ADT/StringExtras.h>
-#include <llvm/Config/llvm-config.h>
+#include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
+#include <llvm/ExecutionEngine/Orc/MemoryMapper.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Host.h>
 
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -65,11 +72,7 @@ public:
     // Locations point into synthetic "input_line_N" buffers; the source
     // excerpt below each diagnostic is what matters.
     opts.ShowLocation = false;
-#if LLVM_VERSION_MAJOR >= 23
-    opts.setShowColors(clang::ShowColorsKind::On);
-#else
-    opts.ShowColors = true;
-#endif
+    inspector::compat::showColors(opts);
     auto *compiler = interp.getCompilerInstance();
     auto printer = std::make_unique<clang::TextDiagnosticPrinter>(stream, opts);
     // The interpreter's source file is already open; the replaced printer
@@ -250,6 +253,40 @@ public:
   }
 };
 
+// Mirrors clang's default executor, except for the memory manager. The
+// default one maps every module separately, so in programs that reserve huge
+// address ranges (e.g. Boehm GC in nix) later modules land gigabytes away
+// from earlier ones. That breaks 32-bit relocations to symbols the JIT
+// itself defines, like __dso_handle. A single slab keeps them close.
+auto executorBuilder()
+    -> llvm::Expected<std::unique_ptr<clang::IncrementalExecutorBuilder>> {
+  auto target = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!target) {
+    return target.takeError();
+  }
+  auto jit = std::make_unique<llvm::orc::LLJITBuilder>();
+  jit->setJITTargetMachineBuilder(std::move(*target));
+  jit->setPrePlatformSetup([](llvm::orc::LLJIT &lljit) -> llvm::Error {
+    // Lets gdb see JIT code, best effort as in clang.
+    llvm::consumeError(llvm::orc::enableDebuggerSupport(lljit));
+    return llvm::Error::success();
+  });
+  // Address space only: pages are committed as modules are linked.
+  constexpr std::size_t slab = std::size_t{1} << 30U;
+  auto memory = llvm::orc::MapperJITLinkMemoryManager::CreateWithMapper<
+      llvm::orc::InProcessMemoryMapper>(slab);
+  if (!memory) {
+    return memory.takeError();
+  }
+  if (auto err =
+          inspector::compat::setMemoryManager(*jit, std::move(*memory))) {
+    return err;
+  }
+  auto builder = std::make_unique<clang::IncrementalExecutorBuilder>();
+  builder->JITBuilder = std::move(jit);
+  return builder;
+}
+
 void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
              const char *declare, const std::string &context,
              const char *const *includes) {
@@ -274,7 +311,13 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
     prompt.sendReady({llvm::toString(compiler.takeError()), true});
     return;
   }
-  auto interp = clang::Interpreter::create(std::move(*compiler));
+  auto executor = executorBuilder();
+  if (!executor) {
+    prompt.sendReady({llvm::toString(executor.takeError()), true});
+    return;
+  }
+  auto interp =
+      clang::Interpreter::create(std::move(*compiler), std::move(*executor));
   if (!interp) {
     prompt.sendReady({llvm::toString(interp.takeError()), true});
     return;

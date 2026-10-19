@@ -72,7 +72,7 @@ if(LLVM_LINK_LLVM_DYLIB)
   list(APPEND INSPECTOR_CLANG_LIBS LLVM)
 else()
   llvm_map_components_to_libnames(_llvm_libs ${LLVM_TARGETS_TO_BUILD} orcjit
-                                  support)
+                                  orcdebugging support)
   list(APPEND INSPECTOR_CLANG_LIBS ${_llvm_libs})
 endif()
 
