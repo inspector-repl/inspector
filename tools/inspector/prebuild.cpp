@@ -38,6 +38,7 @@
 #include <fstream>
 #include <ios>
 #include <memory>
+#include <ranges>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -56,14 +57,26 @@ struct Captured {
 };
 
 auto isBitField(const clang::BindingDecl &binding) -> bool {
-  const auto *member = llvm::dyn_cast_if_present<clang::MemberExpr>(
-      binding.getBinding() != nullptr ? binding.getBinding()->IgnoreImplicit()
-                                      : nullptr);
-  const auto *field =
-      member != nullptr
-          ? llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl())
-          : nullptr;
+  const clang::Expr *expr = binding.getBinding();
+  if (expr == nullptr) {
+    return false;
+  }
+  const auto *member =
+      llvm::dyn_cast<clang::MemberExpr>(expr->IgnoreImplicit());
+  if (member == nullptr) {
+    return false;
+  }
+  const auto *field = llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
   return field != nullptr && field->isBitField();
+}
+
+auto systemIncludeFlags(const Job &job) -> std::vector<std::string> {
+  std::vector<std::string> flags;
+  flags.reserve(job.systemIncludes.size());
+  for (const auto &dir : job.systemIncludes) {
+    flags.push_back("-isystem" + dir);
+  }
+  return flags;
 }
 
 // Variables `stmt` declares into its enclosing scope.
@@ -134,15 +147,14 @@ auto visibleAt(clang::ASTContext &context, const clang::Stmt &breakpoint)
     }
     std::vector<Captured> declaredHere;
     open = scope(*parents.begin(), node, declaredHere);
-    for (auto local = declaredHere.rbegin(); local != declaredHere.rend();
-         ++local) {
-      if (seen.insert(local->name).second) {
-        visible.push_back(*local);
+    for (const auto &local : std::views::reverse(declaredHere)) {
+      if (seen.insert(local.name).second) {
+        visible.push_back(local);
       }
     }
     node = *parents.begin();
   }
-  std::reverse(visible.begin(), visible.end());
+  std::ranges::reverse(visible);
   return visible;
 }
 
@@ -239,9 +251,8 @@ auto parse(const Job &job) -> std::unique_ptr<clang::ASTUnit> {
                            "-DINSPECTOR=<inspector/dummy.h>", "-resource-dir",
                            INSPECTOR_CLANG_RESOURCE_DIR,
                            "-working-directory=" + job.directory.string()});
-  for (const auto &dir : job.systemIncludes) {
-    args.push_back("-isystem" + dir);
-  }
+  const auto system = systemIncludeFlags(job);
+  args.insert(args.end(), system.begin(), system.end());
   args.push_back(job.source);
   std::vector<const char *> argv;
   argv.reserve(args.size());
@@ -304,12 +315,11 @@ auto generate(const Job &job) -> std::vector<fs::path> {
   clang::ASTContext &context = unit->getASTContext();
   const clang::SourceManager &sources = context.getSourceManager();
 
-  std::vector<std::string> forRepl = job.flags;
+  std::vector<std::string> forRepl =
+      driver::replFlags(job.flags, job.directory);
   forRepl.push_back("-I" + driver::paths().include.string());
-  forRepl = driver::replFlags(forRepl, job.directory);
-  for (const auto &dir : job.systemIncludes) {
-    forRepl.push_back("-isystem" + dir);
-  }
+  const auto system = systemIncludeFlags(job);
+  forRepl.insert(forRepl.end(), system.begin(), system.end());
 
   // `#include INSPECTOR` pulls in dummy.h's empty block: where it was
   // included is the breakpoint, the block's place in the AST its scope.
