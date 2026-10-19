@@ -206,8 +206,16 @@ auto wrappedArgv(const std::string &compiler,
   return argv;
 }
 
+auto includeRoot(const fs::path &outdir) -> fs::path {
+  fs::path root = outdir;
+  for (int level = 0; level < climbLimit; ++level) {
+    root /= "_";
+  }
+  return root;
+}
+
 auto compileFlags(const fs::path &outdir) -> std::vector<std::string> {
-  return {"-I" + outdir.string(), "-I" + paths().include.string(),
+  return {"-I" + includeRoot(outdir).string(), "-I" + paths().include.string(),
           "-DINSPECTOR=<inspector/__FILE__-__LINE__>", "-include",
           "inspector/repl.h"};
 }

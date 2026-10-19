@@ -7,6 +7,9 @@ add_test(NAME prelude COMMAND prelude)
 
 add_executable(driver-test driver.cpp)
 target_link_libraries(driver-test PRIVATE inspector-driver GTest::gmock_main)
+target_compile_definitions(
+  driver-test
+  PRIVATE INSPECTOR_SOURCE_INCLUDE_DIR="${PROJECT_SOURCE_DIR}/include")
 add_test(NAME driver COMMAND driver-test)
 
 # Same path users take with make/autotools/meson: CXX=inspector-c++.

@@ -10,6 +10,13 @@ namespace inspector::driver {
 
 constexpr const char *defaultOutdir = ".inspector-includes";
 
+// INSPECTOR includes <inspector/__FILE__-__LINE__>, and __FILE__ may climb
+// out with "../". Nesting the include root this deep in the output
+// directory keeps up to this many climbs inside it.
+constexpr int climbLimit = 16;
+// The -I directory under `outdir` INSPECTOR resolves against.
+auto includeRoot(const std::filesystem::path &outdir) -> std::filesystem::path;
+
 // Where libinspector and its headers live, relative to the running binary.
 struct Paths {
   std::filesystem::path binaries;

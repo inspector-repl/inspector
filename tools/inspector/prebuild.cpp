@@ -235,6 +235,31 @@ auto readFile(const fs::path &path) -> std::string {
   return buffer ? (*buffer)->getBuffer().str() : "";
 }
 
+// Where `#include INSPECTOR` at `file`:`line` resolves to. The kernel walks
+// every component of the unnormalized path, so each directory before a
+// ".." must exist, including names like `"..` from the quoted __FILE__.
+auto headerPath(const fs::path &outdir, llvm::StringRef file, unsigned line)
+    -> fs::path {
+  const fs::path raw = driver::includeRoot(outdir) / "inspector" /
+                       llvm::formatv("\"{0}\"-{1}", file, line).str();
+  const fs::path resolved = raw.lexically_normal();
+  if (*resolved.lexically_relative(outdir).begin() == "..") {
+    throw std::runtime_error(
+        llvm::formatv("{0} climbs more than {1} directories up. Compile it "
+                      "from a closer directory.",
+                      file, driver::climbLimit)
+            .str());
+  }
+  fs::path walked;
+  for (const auto &part : raw.parent_path()) {
+    walked /= part;
+    if (part != "..") {
+      fs::create_directories(walked);
+    }
+  }
+  return resolved;
+}
+
 // Keeps the mtime stable so build systems don't recompile needlessly.
 void writeIfChanged(const fs::path &path, const std::string &content) {
   if (fs::exists(path) && readFile(path) == content) {
@@ -338,12 +363,8 @@ auto generate(const Job &job) -> std::vector<fs::path> {
     if (presumed.isInvalid() || !source) {
       continue;
     }
-    // Must match what INSPECTOR (= <inspector/__FILE__-__LINE__>) expands
-    // to.
     const fs::path path =
-        job.outdir / "inspector" /
-        llvm::formatv("\"{0}\"-{1}", presumed.getFilename(), presumed.getLine())
-            .str();
+        headerPath(job.outdir, presumed.getFilename(), presumed.getLine());
     writeIfChanged(path, header((job.directory / source->getName().str())
                                     .lexically_normal()
                                     .string(),
