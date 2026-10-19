@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from functools import cache
+from itertools import pairwise
 from pathlib import Path
 
 from clang.cindex import (  # type: ignore[import-untyped]
@@ -30,49 +31,76 @@ def _escape_c_string(string: str) -> str:
     return result
 
 
-def _find_inspector_callsites(
-    node: Cursor, closure: list[Cursor], in_function: bool
-) -> tuple[list[SourceLocation], list[list[Cursor]]]:
-    """
-    Macro invocations are not aligned with the remaining ast.
-    - We need the macro invocation to get source line, where INSPECTOR was included
-    - To get the position in the AST, we look for a our dummy header, this
-      gives us the closure with all defined variables and symbols
-    We can combine both information with a simple zip(a,b)
-    """
-    include_locations = []
-    closures = []
-    if not in_function:
-        closure = []
-    if node.kind == CursorKind.MACRO_INSTANTIATION and node.spelling == "INSPECTOR":
-        include_locations.append(node.location)
-    elif in_function:
-        if (
-            node.kind == CursorKind.COMPOUND_STMT
-            and node.location.file is not None
-            and node.location.file.name.endswith("inspector/dummy.h")
-        ):
-            closures.append(list(closure))
-        elif node.kind in (CursorKind.VAR_DECL, CursorKind.PARM_DECL):
-            closure.append(node)
+# Locals of enclosing functions are not reachable from inside these.
+_SCOPE_BARRIERS = {
+    CursorKind.FUNCTION_DECL,
+    CursorKind.CXX_METHOD,
+    CursorKind.CONSTRUCTOR,
+    CursorKind.DESTRUCTOR,
+    CursorKind.CONVERSION_FUNCTION,
+    CursorKind.FUNCTION_TEMPLATE,
+    CursorKind.LAMBDA_EXPR,
+    CursorKind.CLASS_DECL,
+    CursorKind.STRUCT_DECL,
+}
 
-    for c in node.get_children():
-        in_function = in_function or node.kind == CursorKind.FUNCTION_DECL
-        locs, closures_ = _find_inspector_callsites(c, closure, in_function)
-        include_locations.extend(locs)
-        closures.extend(closures_)
 
-    return include_locations, closures
+def _is_breakpoint(node: Cursor) -> bool:
+    return (
+        node.kind == CursorKind.COMPOUND_STMT
+        and node.location.file is not None
+        and node.location.file.name.endswith("inspector/dummy.h")
+    )
+
+
+def _declared(node: Cursor) -> Iterator[Cursor]:
+    if node.kind in (CursorKind.VAR_DECL, CursorKind.PARM_DECL):
+        yield node
+    elif node.kind == CursorKind.DECL_STMT:
+        for child in node.get_children():
+            yield from _declared(child)
+
+
+def _visible(path: list[Cursor]) -> list[Cursor]:
+    """Variables declared before `path[-1]` in each enclosing scope."""
+    found: list[Cursor] = []
+    for parent, child in pairwise(path):
+        if parent.kind in _SCOPE_BARRIERS:
+            found = []
+        for sibling in parent.get_children():
+            if sibling == child:
+                break
+            found.extend(_declared(sibling))
+    return found
+
+
+def _breakpoints(node: Cursor, path: list[Cursor]) -> Iterator[list[Cursor]]:
+    path = [*path, node]
+    if _is_breakpoint(node):
+        yield _visible(path)
+        return
+    for child in node.get_children():
+        yield from _breakpoints(child, path)
 
 
 def find_inspector_callsites(
-    nodes: Cursor,
+    tu: TranslationUnit,
 ) -> Iterator[tuple[SourceLocation, list[Cursor]]]:
-    include_locations, closures = _find_inspector_callsites(nodes, [], False)
-    return zip(include_locations, closures)
+    # Macro expansions aren't part of the AST: the expansion gives the line,
+    # the dummy header's block gives the scope. Both appear in source order.
+    locations = [
+        c.location
+        for c in tu.cursor.get_children()
+        if c.kind == CursorKind.MACRO_INSTANTIATION and c.spelling == "INSPECTOR"
+    ]
+    return zip(locations, _breakpoints(tu.cursor, []))
 
 
-INSPECTOR_VARIABLES_TEMPLATE = """{type}& {name} = *({type}*) %p;"""
+# Spelling the type as a template argument keeps arrays and function
+# pointers valid; canonical types avoid libstdc++-internal aliases.
+INSPECTOR_VARIABLES_TEMPLATE = (
+    "inspector_repl::type<{type}>& {name} = *(inspector_repl::type<{type}>*) %p;"
+)
 
 INSPECTOR_HEADER_TEMPLATE = """
 #ifndef INSIDE_CLING /* yo dawg, I heard you like repls */
@@ -110,9 +138,12 @@ def write_header(
     prelude = []
     pointerlist = []
     for node in closure:
+        # Lambdas and unnamed types have no spelling the REPL could parse.
+        if "(lambda at" in node.type.spelling or "(unnamed" in node.type.spelling:
+            continue
         prelude.append(
             INSPECTOR_VARIABLES_TEMPLATE.format(
-                type=node.type.spelling, name=node.spelling
+                type=node.type.get_canonical().spelling, name=node.spelling
             )
         )
         pointerlist.append(f"(const void*) &{node.spelling}")
@@ -225,7 +256,7 @@ def generate(
     repl_flags = repl_flags_from([*flags, f"-I{INCLUDE_PATH}"]) + system_includes
     return [
         write_header(outdir, loc, closure, repl_flags)
-        for loc, closure in find_inspector_callsites(tu.cursor)
+        for loc, closure in find_inspector_callsites(tu)
     ]
 
 

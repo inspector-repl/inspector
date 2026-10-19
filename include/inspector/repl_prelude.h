@@ -12,6 +12,9 @@
 
 namespace inspector_repl {
 
+// Lets generated declarations name array and function pointer types.
+template <typename T> using type = T;
+
 template <typename T, typename = void>
 struct is_streamable : std::false_type {};
 template <typename T>

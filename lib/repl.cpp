@@ -84,10 +84,9 @@ auto typeName(const clang::Value &value) -> std::string {
   clang::PrintingPolicy policy(value.getASTContext().getLangOpts());
   policy.SuppressDefaultTemplateArgs = true;
   policy.FullyQualifiedName = true;
-  std::string name = value.getType().getAsString(policy);
-  // Bound temporaries lose the std::string sugar.
-  const std::string longString =
-      "std::basic_string<char, std::char_traits<char>, std::allocator<char>>";
+  // Canonical drops the generated inspector_repl::type<> wrapper.
+  std::string name = value.getType().getCanonicalType().getAsString(policy);
+  const std::string longString = "std::basic_string<char>";
   size_t pos = 0;
   while ((pos = name.find(longString)) != std::string::npos) {
     name.replace(pos, longString.size(), "std::string");

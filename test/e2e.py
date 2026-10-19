@@ -56,6 +56,10 @@ def main() -> None:
             "c": "3",
             "undefined_name + 1": "undeclared identifier",
         }
+        # Scoping and type-spelling cases only exist in test/test.cpp.
+        if "& arr = *(" in str(loc.get("locals")):
+            checks["arr[1] + *ptr"] = "9"
+            checks["map"] = '(std::map<std::string, int> &) {{"k", 6}}'
         for stmt, want in checks.items():
             got = ask(stmt)
             print(f"{stmt} => {got!r}")
