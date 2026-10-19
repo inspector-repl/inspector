@@ -24,6 +24,8 @@ stdenv.mkDerivation {
       ../../lib
       ../../python
       ../../test
+      ../../third_party
+      ../../tools
     ];
   };
 

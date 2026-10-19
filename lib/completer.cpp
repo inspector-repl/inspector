@@ -105,13 +105,14 @@ Completer::Completer(std::string path, unsigned line,
           clang::FileSystemOptions{}, llvm::vfs::getRealFileSystem())),
       pch(std::make_shared<clang::PCHContainerOperations>()) {
   std::ifstream file(this->path);
+  unsigned number = 0;
   for (std::string text; std::getline(file, text);) {
-    lines.push_back(std::move(text));
-  }
-  // The reported line can be the one before a `#include INSPECTOR` directive.
-  if (this->line < lines.size() &&
-      lines.at(this->line).find("INSPECTOR") != std::string::npos) {
-    ++this->line;
+    ++number;
+    if (number == this->line) {
+      found = true;
+    } else {
+      (number < this->line ? head : tail) += text + "\n";
+    }
   }
   // Parse the file as the compiler did, not as incremental REPL input.
   invocation->getLangOpts().IncrementalExtensions = false;
@@ -128,18 +129,9 @@ Completer::Completer(std::string path, unsigned line,
   preprocessor.addMacroDef("INSPECTOR=<inspector/dummy.h>");
 }
 
-auto Completer::source(const std::string &atBreakpoint) const -> std::string {
-  std::string out;
-  for (size_t i = 0; i < lines.size(); ++i) {
-    out += i + 1 == line ? atBreakpoint : lines.at(i);
-    out += '\n';
-  }
-  return out;
-}
-
 auto Completer::complete(const std::string &before, const std::string &text)
     -> Completions {
-  if (line == 0 || line > lines.size()) {
+  if (!found) {
     return {};
   }
   if (!unit) {
@@ -161,8 +153,8 @@ auto Completer::complete(const std::string &before, const std::string &text)
                                         : text.size() - lastNewline - 1) +
       1);
 
-  const auto buffer =
-      llvm::MemoryBuffer::getMemBufferCopy(source(atBreakpoint), path);
+  const auto buffer = llvm::MemoryBuffer::getMemBufferCopy(
+      head + atBreakpoint + "\n" + tail, path);
   const std::pair<std::string, llvm::MemoryBuffer *> remapped{path,
                                                               buffer.get()};
   Consumer consumer;

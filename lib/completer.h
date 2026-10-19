@@ -26,7 +26,10 @@ struct Completions {
 class Completer {
   std::string path;
   unsigned line;
-  std::vector<std::string> lines;
+  // The file split around the breakpoint line, which input replaces.
+  std::string head;
+  std::string tail;
+  bool found = false;
   std::shared_ptr<clang::CompilerInvocation> invocation;
   std::shared_ptr<clang::DiagnosticOptions> diagOpts;
   clang::IgnoringDiagConsumer ignore; // completion errors are expected noise
@@ -34,8 +37,6 @@ class Completer {
   llvm::IntrusiveRefCntPtr<clang::FileManager> files;
   std::shared_ptr<clang::PCHContainerOperations> pch;
   std::unique_ptr<clang::ASTUnit> unit; // parsed lazily; caches the preamble
-
-  auto source(const std::string &atBreakpoint) const -> std::string;
 
 public:
   Completer(std::string path, unsigned line,

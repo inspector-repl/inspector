@@ -15,5 +15,9 @@ add_custom_target(e2e_program ALL DEPENDS ${_e2e_bin})
 
 add_test(NAME e2e COMMAND ${Python3_EXECUTABLE}
                           ${CMAKE_CURRENT_SOURCE_DIR}/e2e.py ${_e2e_bin})
+add_test(NAME repl_tty
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/repl_tty.py
+                 $<TARGET_FILE:inspector-repl> ${_e2e_bin})
+
 set_tests_properties(e2e PROPERTIES ENVIRONMENT
                                     INSPECTOR_LLVM_MAJOR=${LLVM_VERSION_MAJOR})

@@ -1,6 +1,10 @@
 import argparse
+import os
 import shlex
+import shutil
 import sys
+from pathlib import Path
+from typing import Any
 
 from . import repl_server
 from .cflags import print_cflags
@@ -30,7 +34,7 @@ def parse_options(argv: list[str]) -> argparse.Namespace:
     subparsers.add_parser("wrap", help="wrap a compiler: inspector wrap g++ ...")
 
     repl_parser = subparsers.add_parser("repl")
-    repl_parser.set_defaults(func=repl_server.process_clients)
+    repl_parser.set_defaults(func=_repl)
 
     args = parser.parse_args(argv)
 
@@ -38,6 +42,15 @@ def parse_options(argv: list[str]) -> argparse.Namespace:
         parser.print_help()
         sys.exit(1)
     return args
+
+
+def _repl(args: Any) -> None:
+    """Prefer the native client installed next to this script."""
+    native = Path(sys.argv[0]).resolve().parent / "inspector-repl"
+    found = str(native) if native.exists() else shutil.which("inspector-repl")
+    if found and not os.environ.get("INSPECTOR_PYTHON_REPL"):
+        os.execv(found, [found])
+    repl_server.process_clients(args)
 
 
 def _real_main(argv: list[str]) -> None:

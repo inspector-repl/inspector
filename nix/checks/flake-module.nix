@@ -56,7 +56,8 @@
             "-DBUILD_TESTING=ON"
           ];
           # run-clang-tidy has a /usr/bin/env shebang, unavailable in the sandbox.
-          buildPhase = "python3 $(command -v run-clang-tidy) -quiet -p .";
+          # Vendored code keeps its upstream style.
+          buildPhase = "python3 $(command -v run-clang-tidy) -quiet -p . '^((?!third_party).)*$'";
           installPhase = "touch $out";
           doCheck = false;
           dontFixup = true;
