@@ -18,8 +18,9 @@ add_custom_command(
   OUTPUT ${_e2e_bin}
   COMMAND ${CMAKE_COMMAND} -E env INSPECTOR_CXX=${CMAKE_CXX_COMPILER}
           $<TARGET_FILE:inspector-cxx> -std=c++17
-          ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp -o ${_e2e_bin}
-  DEPENDS test.cpp inspector inspector-cxx
+          ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/answer.cpp -o ${_e2e_bin}
+  DEPENDS test.cpp answer.cpp inspector inspector-cxx
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(e2e_program ALL DEPENDS ${_e2e_bin})
 

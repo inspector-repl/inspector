@@ -83,6 +83,12 @@ auto env(const char *name, std::string fallback) -> std::string {
   return value != nullptr ? std::string(value) : std::move(fallback);
 }
 
+auto isSource(std::string_view path) -> bool {
+  return std::ranges::any_of(
+      sourceSuffixes,
+      [&](std::string_view suffix) -> bool { return path.ends_with(suffix); });
+}
+
 auto splitCommand(const std::vector<std::string> &args) -> Split {
   Split split;
   for (size_t i = 0; i < args.size(); ++i) {
@@ -98,11 +104,7 @@ auto splitCommand(const std::vector<std::string> &args) -> Split {
       if (keep) {
         split.flags.push_back(value);
       }
-    } else if (!isFlag &&
-               std::ranges::any_of(sourceSuffixes,
-                                   [&](std::string_view suffix) -> bool {
-                                     return arg.ends_with(suffix);
-                                   })) {
+    } else if (!isFlag && isSource(arg)) {
       split.sources.push_back(arg);
     }
   }
@@ -158,20 +160,29 @@ auto compilerIncludePaths(const std::string &compiler)
   if (status != 0 || !output) {
     return {};
   }
-  llvm::StringRef text = (*output)->getBuffer();
-  text = text.split("#include <...> search starts here:\n").second;
-  text = text.split("End of search list.").first;
-  llvm::SmallVector<llvm::StringRef> lines;
-  text.split(lines, '\n', -1, /*KeepEmpty=*/false);
   std::vector<std::string> found;
-  for (llvm::StringRef line : lines) {
-    line = line.trim();
-    line.consume_back(" (framework directory)");
-    if (fs::is_directory(line.str())) {
-      found.push_back(line.str());
+  for (auto &dir : parseIncludeSearch((*output)->getBuffer())) {
+    if (fs::is_directory(dir)) {
+      found.push_back(std::move(dir));
     }
   }
   return found;
+}
+
+auto parseIncludeSearch(llvm::StringRef verbose) -> std::vector<std::string> {
+  verbose = verbose.split("#include <...> search starts here:\n").second;
+  verbose = verbose.split("End of search list.").first;
+  llvm::SmallVector<llvm::StringRef> lines;
+  verbose.split(lines, '\n', -1, /*KeepEmpty=*/false);
+  std::vector<std::string> dirs;
+  for (llvm::StringRef line : lines) {
+    line = line.trim();
+    line.consume_back(" (framework directory)");
+    if (!line.contains("/lib/gcc/") && !line.contains("/lib/clang/")) {
+      dirs.push_back(line.str());
+    }
+  }
+  return dirs;
 }
 
 auto wrappedArgv(const std::string &compiler,
@@ -222,7 +233,9 @@ auto compileFlags(const fs::path &outdir) -> std::vector<std::string> {
 
 auto linkFlags() -> std::vector<std::string> {
   const std::string lib = paths().library.string();
-  return {"-L" + lib, "-Wl,-rpath," + lib, "-linspector"};
+  // The REPL calls the program's own functions, which the JIT can only find
+  // if the executable exports them.
+  return {"-rdynamic", "-L" + lib, "-Wl,-rpath," + lib, "-linspector"};
 }
 
 auto exec(const std::vector<std::string> &args) -> int {

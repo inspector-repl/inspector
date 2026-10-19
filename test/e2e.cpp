@@ -156,6 +156,13 @@ TEST_F(Session, CapturesTrickyLocals) {
   EXPECT_THAT(ask("whole"), HasSubstr("10"));
 }
 
+TEST_F(Session, CallsFunctionsOfTheProgram) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  EXPECT_THAT(ask("answer()"), HasSubstr("42"));
+}
+
 TEST_F(Session, ReportsExceptions) {
   if (!hasTestLocals()) {
     GTEST_SKIP() << "program is not test/test.cpp";

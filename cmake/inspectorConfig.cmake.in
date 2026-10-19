@@ -15,4 +15,7 @@ function(inspector_enable target)
              ${CMAKE_COMMAND} -E env INSPECTOR_INCLUDE_DIR=${_dir}
              ${INSPECTOR_EXECUTABLE} wrap)
   target_link_libraries(${target} PRIVATE inspector::inspector)
+  # The REPL calls the program's own functions, which the JIT can only find
+  # if the executable exports them.
+  set_property(TARGET ${target} PROPERTY ENABLE_EXPORTS ON)
 endfunction()

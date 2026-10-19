@@ -25,6 +25,7 @@
 #include <clang/Frontend/CompilerInvocation.h>
 #include <clang/Serialization/PCHContainerOperations.h>
 #include <llvm/ADT/IntrusiveRefCntPtr.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/Format.h>
@@ -269,6 +270,43 @@ void writeIfChanged(const fs::path &path, const std::string &content) {
   std::ofstream(path, std::ios::binary) << content;
 }
 
+// Sources a unity build file #includes. Meson writes #include</abs/x.cc>,
+// CMake #include "/abs/x.cc".
+auto includedSources(const fs::path &file, llvm::StringRef text)
+    -> std::vector<fs::path> {
+  llvm::SmallVector<llvm::StringRef> lines;
+  text.split(lines, '\n');
+  std::vector<fs::path> sources;
+  for (const llvm::StringRef line : lines) {
+    llvm::StringRef include = line.trim();
+    if (!include.consume_front("#")) {
+      continue;
+    }
+    include = include.ltrim();
+    if (!include.consume_front("include")) {
+      continue;
+    }
+    include = include.trim();
+    if (include.size() > 2 && driver::isSource(include.drop_back())) {
+      sources.push_back(file.parent_path() /
+                        include.drop_front().drop_back().str());
+    }
+  }
+  return sources;
+}
+
+// Cheap enough for every compile, so unrelated files never pay for a parse.
+auto mentionsInspector(const fs::path &source) -> bool {
+  const std::string text = readFile(source);
+  if (text.find("INSPECTOR") != std::string::npos) {
+    return true;
+  }
+  return std::ranges::any_of(
+      includedSources(source, text), [](const fs::path &included) -> bool {
+        return readFile(included).find("INSPECTOR") != std::string::npos;
+      });
+}
+
 auto parse(const Job &job) -> std::unique_ptr<clang::ASTUnit> {
   std::vector<std::string> args = {"clang++", "-x", "c++"};
   args.insert(args.end(), job.flags.begin(), job.flags.end());
@@ -330,10 +368,7 @@ auto escapeCString(const std::string &text) -> std::string {
 }
 
 auto generate(const Job &job) -> std::vector<fs::path> {
-  // Cheap enough for every compile, so unrelated files never pay for a
-  // parse.
-  if (!job.scanAll && readFile(job.directory / job.source).find("INSPECTOR") ==
-                          std::string::npos) {
+  if (!job.scanAll && !mentionsInspector(job.directory / job.source)) {
     return {};
   }
   const auto unit = parse(job);

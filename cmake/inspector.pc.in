@@ -6,4 +6,4 @@ Name: inspector
 Description: Drop-anywhere C++ REPL (compile through inspector-c++ to use INSPECTOR)
 Version: @PROJECT_VERSION@
 Cflags: -I${includedir}
-Libs: -L${libdir} -Wl,-rpath,${libdir} -linspector
+Libs: -rdynamic -L${libdir} -Wl,-rpath,${libdir} -linspector
