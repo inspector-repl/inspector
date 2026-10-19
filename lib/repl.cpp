@@ -22,6 +22,7 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -180,10 +181,29 @@ public:
     diags.clear();
   }
 
+  // Each line of `context` binds one local. If they don't all load at once,
+  // they are retried one by one so a single unloadable local only costs
+  // itself; the skipped ones are reported without failing the session.
   auto setup(const std::string &declare, const std::string &context) -> Reply {
     diags.clear();
-    const bool loaded = run(declare) && run(context);
-    return {loaded ? "" : failure(), !loaded};
+    if (!run(declare)) {
+      return {failure(), true};
+    }
+    diags.clear();
+    if (run(context)) {
+      return {"", false};
+    }
+    std::string skipped;
+    std::istringstream lines(context);
+    for (std::string line; std::getline(lines, line);) {
+      diags.clear();
+      if (!run(line)) {
+        skipped += failure();
+      }
+    }
+    diags.clear();
+    return {skipped.empty() ? "" : "some locals are unavailable:\n" + skipped,
+            false};
   }
 
   // Expressions are bound to a variable first so class types can be rendered

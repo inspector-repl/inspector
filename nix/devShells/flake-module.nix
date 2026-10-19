@@ -4,14 +4,6 @@
     let
       llvmPackages = pkgs.llvmPackages_latest;
       llvm = llvmPackages.llvm;
-
-      pythonEnv = pkgs.python3.withPackages (
-        ps: with ps; [
-          setuptools
-          libclang
-          hatchling
-        ]
-      );
     in
     {
       devShells = {
@@ -29,7 +21,6 @@
                   llvmPackages.clang-unwrapped.lib
                   llvmPackages.clang
                   llvm.dev
-                  pythonEnv
                 ]
                 ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
                   libffi

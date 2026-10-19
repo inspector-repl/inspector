@@ -5,14 +5,18 @@ target_include_directories(prelude PRIVATE ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(prelude PRIVATE GTest::gtest_main)
 add_test(NAME prelude COMMAND prelude)
 
+add_executable(driver-test driver.cpp)
+target_link_libraries(driver-test PRIVATE inspector-driver GTest::gmock_main)
+add_test(NAME driver COMMAND driver-test)
+
 # Same path users take with make/autotools/meson: CXX=inspector-c++.
 set(_e2e_bin ${CMAKE_CURRENT_BINARY_DIR}/test-proc)
 add_custom_command(
   OUTPUT ${_e2e_bin}
   COMMAND ${CMAKE_COMMAND} -E env INSPECTOR_CXX=${CMAKE_CXX_COMPILER}
-          ${Python3_EXECUTABLE} ${PROJECT_BINARY_DIR}/inspector-c++ -std=c++17
+          $<TARGET_FILE:inspector-cxx> -std=c++17
           ${CMAKE_CURRENT_SOURCE_DIR}/test.cpp -o ${_e2e_bin}
-  DEPENDS test.cpp inspector python_target
+  DEPENDS test.cpp inspector inspector-cxx
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(e2e_program ALL DEPENDS ${_e2e_bin})
 

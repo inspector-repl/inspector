@@ -40,7 +40,7 @@ $ ./main              # terminal 2: stops at each INSPECTOR and hands over
 
 ## How it works
 
-1. At build time, `inspector` parses each source file with libclang. For every
+1. At build time, `inspector` parses each source file with Clang. For every
    `#include INSPECTOR` it writes a small header that captures the addresses
    of all local variables in scope.
 2. At runtime the program calls into `libinspector`, which connects to
@@ -57,7 +57,6 @@ Requirements:
   Released distro packages work (apt.llvm.org, Homebrew, Arch, nixpkgs); no
   LLVM source tree or fork is needed.
 - CMake >= 3.20, ninja
-- python3 with libclang and hatchling (build-time instrumentation only)
 - GoogleTest, only with `BUILD_TESTING` (the default)
 
 The line editor, [replxx](https://github.com/ClickHouse/replxx), is vendored

@@ -12,7 +12,6 @@
           llvmPackages
           llvm
           ;
-        python3 = pkgs.python3;
       };
     in
     {

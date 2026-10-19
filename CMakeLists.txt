@@ -15,7 +15,7 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Threads REQUIRED)
 
 # ClangConfig pulls in LLVMConfig, so any packaged LLVM >= 22 works (distro
 # packages, nixpkgs, Homebrew, apt.llvm.org); no source tree is needed.
@@ -58,7 +58,15 @@ message(STATUS "Using clang resource dir ${CLANG_RESOURCE_DIR}")
 if(TARGET clang-cpp)
   set(INSPECTOR_CLANG_LIBS clang-cpp)
 else()
-  set(INSPECTOR_CLANG_LIBS clangInterpreter clangFrontend clangLex clangBasic)
+  set(INSPECTOR_CLANG_LIBS
+      clangInterpreter
+      clangTooling
+      clangASTMatchers
+      clangFrontend
+      clangDriver
+      clangAST
+      clangLex
+      clangBasic)
 endif()
 if(LLVM_LINK_LLVM_DYLIB)
   list(APPEND INSPECTOR_CLANG_LIBS LLVM)
@@ -71,7 +79,7 @@ endif()
 add_subdirectory(third_party/replxx)
 add_subdirectory(lib)
 add_subdirectory(tools/repl)
-add_subdirectory(python)
+add_subdirectory(tools/inspector)
 
 include(CTest)
 if(BUILD_TESTING)
