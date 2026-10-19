@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import repl_server
 from .cflags import print_cflags
 from .prebuild import generate_header_for_file
 from .wrap import wrap_main
@@ -44,13 +43,13 @@ def parse_options(argv: list[str]) -> argparse.Namespace:
     return args
 
 
-def _repl(args: Any) -> None:
-    """Prefer the native client installed next to this script."""
+def _repl(_args: Any) -> None:
+    """Run the native client, installed next to this script."""
     native = Path(sys.argv[0]).resolve().parent / "inspector-repl"
     found = str(native) if native.exists() else shutil.which("inspector-repl")
-    if found and not os.environ.get("INSPECTOR_PYTHON_REPL"):
-        os.execv(found, [found])
-    repl_server.process_clients(args)
+    if not found:
+        sys.exit("inspector: inspector-repl not found")
+    os.execv(found, [found])
 
 
 def _real_main(argv: list[str]) -> None:

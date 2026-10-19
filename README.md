@@ -43,8 +43,9 @@ $ ./main              # terminal 2: stops at each INSPECTOR and hands over
    `#include INSPECTOR` it writes a small header that captures the addresses
    of all local variables in scope.
 2. At runtime the program calls into `libinspector`, which connects to
-   `inspector repl` over a Unix socket. It then starts clang-repl
-   (`clang::Interpreter`) with references to those variables.
+   `inspector repl` (the `inspector-repl` binary) over a Unix socket. It then
+   starts clang-repl (`clang::Interpreter`) with references to those
+   variables; the REPL sends input, completion requests and `.quit` back.
 3. Typing `.quit` resumes the program.
 
 ## Build
@@ -55,7 +56,11 @@ Requirements:
   Released distro packages work (apt.llvm.org, Homebrew, Arch, nixpkgs); no
   LLVM source tree or fork is needed.
 - CMake >= 3.20, ninja
-- python3 with prompt-toolkit, pygments, libclang and hatchling
+- python3 with libclang and hatchling (build-time instrumentation only)
+
+The line editor, [replxx](https://github.com/ClickHouse/replxx), is vendored
+in `third_party/` on purpose: distributions ship the 2021 release, which
+lacks the fork's paste, redraw and crash fixes.
 
 ```console
 $ cmake -B build -GNinja

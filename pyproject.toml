@@ -9,8 +9,6 @@ description = "Inspector - C++ REPL integration"
 requires-python = ">=3.13"
 license = "MIT"
 dependencies = [
-    "prompt-toolkit",
-    "pygments",
     "libclang",
 ]
 
