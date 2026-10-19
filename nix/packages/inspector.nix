@@ -36,8 +36,6 @@ stdenv.mkDerivation {
       ps.hatchling
       ps.pip
       ps.libclang
-      ps.prompt-toolkit
-      ps.pygments
     ]))
     python3.pkgs.wrapPython
   ];
@@ -52,8 +50,6 @@ stdenv.mkDerivation {
   ];
 
   pythonPath = with python3.pkgs; [
-    prompt-toolkit
-    pygments
     libclang
   ];
 

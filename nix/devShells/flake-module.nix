@@ -7,8 +7,6 @@
 
       pythonEnv = pkgs.python3.withPackages (
         ps: with ps; [
-          prompt-toolkit
-          pygments
           setuptools
           libclang
           hatchling

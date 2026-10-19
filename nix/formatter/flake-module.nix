@@ -6,9 +6,6 @@
 
   perSystem =
     { pkgs, ... }:
-    let
-      types-pygments = pkgs.callPackage ./types-pygments.nix { };
-    in
     {
       treefmt = {
         projectRootFile = "flake.nix";
@@ -29,10 +26,7 @@
                   "--strict"
                 ];
                 extraPythonPackages = [
-                  pkgs.python3.pkgs.prompt-toolkit
-                  pkgs.python3.pkgs.pygments
                   pkgs.python3.pkgs.libclang
-                  types-pygments
                 ];
               };
             };
