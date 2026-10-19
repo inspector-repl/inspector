@@ -233,7 +233,9 @@ auto compileFlags(const fs::path &outdir) -> std::vector<std::string> {
 
 auto linkFlags() -> std::vector<std::string> {
   const std::string lib = paths().library.string();
-  return {"-L" + lib, "-Wl,-rpath," + lib, "-linspector"};
+  // The REPL calls the program's own functions, which the JIT can only find
+  // if the executable exports them.
+  return {"-rdynamic", "-L" + lib, "-Wl,-rpath," + lib, "-linspector"};
 }
 
 auto exec(const std::vector<std::string> &args) -> int {

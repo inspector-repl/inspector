@@ -13,6 +13,10 @@ struct Bits {
 };
 } // namespace
 
+// Defined in another file of the executable, so the REPL must find it
+// there.
+int answer();
+
 int main(int argc, char **argv) {
   // Variables of closed scopes, lambdas and local classes must not be
   // captured; arrays, lambdas and libstdc++ aliases must still load.
