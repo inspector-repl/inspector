@@ -4,10 +4,10 @@
 
 #include <clang/Tooling/JSONCompilationDatabase.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Allocator.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Parallel.h>
 #include <llvm/Support/StringSaver.h>
 #include <llvm/Support/Threading.h>
@@ -109,8 +109,12 @@ auto prebuildJobs(const PrebuildArgs &args) -> std::vector<Job> {
   jobs.reserve(args.sources.size());
   const std::string cxx = inspector::driver::env("CXX", "c++");
   for (const auto &source : args.sources) {
-    jobs.push_back({fs::current_path(), source, args.cflags,
-                    fs::absolute(args.outdir), systemIncludes(cxx), scanAll});
+    jobs.push_back({.directory = fs::current_path(),
+                    .source = source,
+                    .flags = args.cflags,
+                    .outdir = fs::absolute(args.outdir),
+                    .systemIncludes = systemIncludes(cxx),
+                    .scanAll = scanAll});
   }
   if (args.compileCommands.empty()) {
     return jobs;
@@ -130,9 +134,12 @@ auto prebuildJobs(const PrebuildArgs &args) -> std::vector<Job> {
     const auto split =
         inspector::driver::splitCommand({std::next(argv.begin()), argv.end()});
     for (const auto &source : split.sources) {
-      jobs.push_back({command.Directory, source, split.flags,
-                      fs::path(command.Directory) / args.outdir,
-                      systemIncludes(argv.front()), scanAll});
+      jobs.push_back({.directory = command.Directory,
+                      .source = source,
+                      .flags = split.flags,
+                      .outdir = fs::path(command.Directory) / args.outdir,
+                      .systemIncludes = systemIncludes(argv.front()),
+                      .scanAll = scanAll});
     }
   }
   return jobs;
@@ -165,11 +172,8 @@ auto prebuild(const std::vector<std::string> &rawArgs) -> int {
 }
 
 auto repl() -> int {
-  static int anchor = 0;
   const fs::path sibling =
-      fs::path(llvm::sys::fs::getMainExecutable(nullptr, &anchor))
-          .parent_path() /
-      "inspector-repl";
+      inspector::driver::paths().binaries / "inspector-repl";
   return inspector::driver::exec(
       {fs::exists(sibling) ? sibling.string() : "inspector-repl"});
 }
@@ -186,7 +190,12 @@ auto run(const std::vector<std::string> &args) -> int {
     return prebuild(rest);
   }
   if (command == "print-cflags") {
-    std::cout << inspector::driver::cflags() << "\n";
+    // Relative, for pasting into a Makefile next to `inspector prebuild`.
+    auto flags =
+        inspector::driver::compileFlags(inspector::driver::defaultOutdir);
+    const auto link = inspector::driver::linkFlags();
+    flags.insert(flags.end(), link.begin(), link.end());
+    std::cout << llvm::join(flags, " ") << "\n";
     return 0;
   }
   if (command == "repl") {

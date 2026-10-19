@@ -175,8 +175,8 @@ auto Completer::complete(const std::string &before, const std::string &text)
     }
   }
   Completions out = consumer.take();
-  std::sort(out.names.begin(), out.names.end());
-  out.names.erase(std::unique(out.names.begin(), out.names.end()),
-                  out.names.end());
+  std::ranges::sort(out.names);
+  const auto duplicates = std::ranges::unique(out.names);
+  out.names.erase(duplicates.begin(), duplicates.end());
   return out;
 }
