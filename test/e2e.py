@@ -60,6 +60,8 @@ def main() -> None:
         if "& arr = *(" in str(loc.get("locals")):
             checks["arr[1] + *ptr"] = "9"
             checks["map"] = '(std::map<std::string, int> &) {{"k", 6}}'
+            checks["throw 1;"] = "uncaught exception"
+            checks["b.at(99)"] = "uncaught exception"
         for stmt, want in checks.items():
             got = ask(stmt)
             print(f"{stmt} => {got!r}")
