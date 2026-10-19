@@ -224,6 +224,15 @@ TEST_F(Session, LinksAcrossLargeMappings) {
   EXPECT_THAT(ask("local()"), HasSubstr("3"));
 }
 
+TEST_F(Session, OutlivesThreadLocals) {
+#ifdef __APPLE__
+  GTEST_SKIP() << "the JIT lacks emulated TLS (___emutls_get_address)";
+#endif
+  EXPECT_EQ(ask("struct Tls { ~Tls() {} int v = 4; };"), "");
+  EXPECT_EQ(ask("int tls() { static thread_local Tls t; return t.v; }"), "");
+  EXPECT_THAT(ask("tls()"), HasSubstr("4"));
+}
+
 // Without a listening REPL the program must keep running.
 TEST(NoListener, ProgramContinues) {
   const TempDir tmp;
