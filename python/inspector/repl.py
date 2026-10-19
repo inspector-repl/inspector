@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pygments
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI, HTML
 from prompt_toolkit.history import FileHistory, History, InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
@@ -14,8 +16,6 @@ from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.shortcuts import print_formatted_text
 from pygments.formatters import TerminalFormatter
 from pygments.lexers import CppLexer
-
-from .clang_completer import ClangCompleter
 
 HELP = """\
 Type C++ statements or expressions; expressions print their value.
@@ -81,6 +81,25 @@ def _key_bindings() -> KeyBindings:
     return kb
 
 
+class ProgramCompleter(Completer):
+    """Asks the inspected program, which completes in its own clang session."""
+
+    def __init__(self, repl: "Repl") -> None:
+        self.repl = repl
+
+    def get_completions(
+        self, document: Document, complete_event: object
+    ) -> Iterator[Completion]:
+        try:
+            reply = self.repl.request({"complete": document.text_before_cursor})
+        except ProgramGone:
+            return
+        prefix = str(reply.get("prefix", ""))
+        names = reply.get("completions")
+        for name in names if isinstance(names, list) else []:
+            yield Completion(str(name), start_position=-len(prefix))
+
+
 class Repl:
     def __init__(
         self,
@@ -137,12 +156,15 @@ class Repl:
             ANSI(self.get_code_context(self.file_path, self.line_number))
         )
 
-    def _send(self, text: str) -> dict[str, object]:
+    def request(self, message: dict[str, str]) -> dict[str, object]:
         try:
-            self.output.sendall(json.dumps({"input": text}).encode() + b"\0")
+            self.output.sendall(json.dumps(message).encode() + b"\0")
             return json.loads(next(self.input))  # type: ignore[no-any-return]
         except (BrokenPipeError, ConnectionResetError, StopIteration) as e:
             raise ProgramGone from e
+
+    def _send(self, text: str) -> dict[str, object]:
+        return self.request({"input": text})
 
     def _show(self, reply: dict[str, object]) -> None:
         value = str(reply.get("value", "")).rstrip("\n")
@@ -168,14 +190,10 @@ class Repl:
         except StopIteration:
             print("program disconnected during startup")
             return
-        try:
-            completer = ClangCompleter(Path(self.file_path), self.line_number)
-        except OSError:
-            completer = None
         session: PromptSession[str] = PromptSession(
             history=history_file(),
             lexer=PygmentsLexer(CppLexer),
-            completer=completer,
+            completer=ProgramCompleter(self),
             key_bindings=_key_bindings(),
             multiline=True,
             prompt_continuation=lambda width, *_: "." * (width - 1) + " ",
