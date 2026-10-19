@@ -57,6 +57,12 @@ def main() -> None:
         if not ready.get("ready") or ready.get("error"):
             raise SystemExit(f"interpreter failed to start: {ready}")
         checks = {
+            "#include <optional>": "",
+            # A reference into a temporary must not dangle when printed.
+            "std::optional<int>{5}.value()": "(int) 5",
+            "std::optional<std::string>{b}.value()": '"Hello world!"',
+            # Input runs at run time, like code in the program.
+            "__builtin_is_constant_evaluated()": "false",
             "a + 41": "42",
             "b.size()": "12",
             "b": '"Hello world!"',

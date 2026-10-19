@@ -143,13 +143,14 @@ class Session {
   // decltype is unevaluated, so this probe instantiates no function bodies.
   // A failed instantiation inside a discarded input would otherwise leave
   // the JIT referencing symbols that were never emitted.
-  auto isValueExpr(const std::string &code) -> bool {
+  // Returns the alias naming the type of `code`, or "" if it has none.
+  auto valueType(const std::string &code) -> std::string {
     const std::string alias = fresh("__inspector_t");
     clang::Value isVoid;
     const bool typed = run("using " + alias + " = decltype((" + code + "));") &&
                        run("std::is_void_v<" + alias + ">", &isVoid);
     diags.clear();
-    return typed && isVoid.hasValue() && !isVoid.getBool();
+    return typed && isVoid.hasValue() && !isVoid.getBool() ? alias : "";
   }
 
   auto show(const std::string &var) -> Reply {
@@ -196,10 +197,13 @@ public:
     }
     const bool wantValue =
         input.back() != ';' && input.back() != '}' && input.front() != '#';
-    if (wantValue && isValueExpr(input)) {
+    const std::string type = wantValue ? valueType(input) : "";
+    if (!type.empty()) {
       const std::string var = fresh("__inspector_v");
       diags.clear();
-      if (run("auto &&" + var + " = (" + input + ");")) {
+      // (void) keeps a user-defined operator, out of the comma.
+      if (run("inspector_repl::stored<" + type + "> " + var +
+              " = ((void)inspector_repl::runtime(), (" + input + "));")) {
         return show(var);
       }
       // Re-running would repeat side effects that led up to the throw.
