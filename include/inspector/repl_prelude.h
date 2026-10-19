@@ -15,6 +15,17 @@ namespace inspector_repl {
 // Lets generated declarations name array and function pointer types.
 template <typename T> using type = T;
 
+// How a result of decltype((expr)) is held: lvalues by reference, values as
+// is, and xvalues (often references into a temporary that dies at the end
+// of the statement) by value.
+template <typename T>
+using stored = std::conditional_t<std::is_rvalue_reference_v<T>,
+                                  std::remove_reference_t<T>, T>;
+
+// Not constexpr: calling it first rules out constant initialization, so
+// input runs at run time like code in the program.
+inline void runtime() {}
+
 template <typename T, typename = void>
 struct is_streamable : std::false_type {};
 template <typename T>
