@@ -28,8 +28,9 @@ using testing::StartsWith;
 
 namespace {
 
-auto program() -> std::string & {
-  static std::string path;
+// argv entry. Copying it into a std::string in main could throw.
+auto program() -> const char *& {
+  static const char *path = nullptr;
   return path;
 }
 
