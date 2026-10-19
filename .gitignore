@@ -61,5 +61,4 @@ wheels/
 cmake-build-*
 *.pyc
 .*.swp
-python/inspector/config.py
 result*

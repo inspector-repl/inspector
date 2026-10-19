@@ -16,7 +16,7 @@
           # Keep doCheck so the tests are built (it sets BUILD_TESTING); the
           # package check already runs them, so only note where the binary is.
           checkPhase = "e2e=$PWD/test/inspector-e2e";
-          postFixup = old.postFixup + ''
+          postFixup = (old.postFixup or "") + ''
             cp -r ${../../examples} examples
             chmod -R u+w examples
             (
@@ -50,7 +50,10 @@
         # Same clang as clang-tidy so compile_commands carry flags it understands.
         clang-tidy = inspector.overrideAttrs (old: {
           pname = "inspector-clang-tidy";
-          nativeBuildInputs = old.nativeBuildInputs ++ [ llvmPackages.clang-tools ];
+          nativeBuildInputs = old.nativeBuildInputs ++ [
+            llvmPackages.clang-tools
+            pkgs.python3 # run-clang-tidy
+          ];
           cmakeFlags = (old.cmakeFlags or [ ]) ++ [
             "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
             "-DBUILD_TESTING=ON"

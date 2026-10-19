@@ -142,6 +142,19 @@ TEST_F(Session, SpellsScopedTypes) {
               HasSubstr(R"((std::map<std::string, int> &) {{"k", 6}})"));
 }
 
+TEST_F(Session, CapturesTrickyLocals) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  // Every local loaded, none skipped.
+  EXPECT_EQ(stopped()->ready.getString("value").value_or(""), "");
+  EXPECT_THAT(ask("shadowed"), HasSubstr("2"));
+  EXPECT_THAT(ask("ref"), HasSubstr("1"));
+  EXPECT_THAT(ask("hidden.value"), HasSubstr("7"));
+  EXPECT_THAT(ask("first + second"), HasSubstr("17"));
+  EXPECT_THAT(ask("whole"), HasSubstr("10"));
+}
+
 TEST_F(Session, ReportsExceptions) {
   if (!hasTestLocals()) {
     GTEST_SKIP() << "program is not test/test.cpp";

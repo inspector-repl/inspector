@@ -5,7 +5,6 @@
   ninja,
   llvmPackages,
   llvm,
-  python3,
   libffi,
   gtest,
 }:
@@ -20,10 +19,8 @@ stdenv.mkDerivation {
       ../../CMakeLists.txt
       ../../.clang-tidy
       ../../cmake
-      ../../pyproject.toml
       ../../include
       ../../lib
-      ../../python
       ../../test
       ../../third_party
       ../../tools
@@ -33,12 +30,6 @@ stdenv.mkDerivation {
   nativeBuildInputs = [
     cmake
     ninja
-    (python3.withPackages (ps: [
-      ps.hatchling
-      ps.pip
-      ps.libclang
-    ]))
-    python3.pkgs.wrapPython
   ];
 
   buildInputs = [
@@ -51,19 +42,11 @@ stdenv.mkDerivation {
     libffi
   ];
 
-  pythonPath = with python3.pkgs; [
-    libclang
-  ];
-
   cmakeFlags = [
     "-DCLANG_RESOURCE_DIR=${lib.getLib llvmPackages.clang-unwrapped}/lib/clang/${lib.versions.major llvmPackages.clang-unwrapped.version}"
   ];
 
   doCheck = true;
-
-  postFixup = ''
-    wrapPythonPrograms
-  '';
 
   meta.mainProgram = "inspector";
 }

@@ -1,6 +1,17 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
+
+namespace {
+struct Hidden {
+  int value = 7;
+};
+struct Bits {
+  int flag : 1;
+  int whole;
+};
+} // namespace
 
 int main(int argc, char **argv) {
   // Variables of closed scopes, lambdas and local classes must not be
@@ -18,6 +29,21 @@ int main(int argc, char **argv) {
   std::map<std::string, int> map{{"k", 6}};
   int a = 1;
   std::string b = "Hello world!";
+  // References, anonymous-namespace types and structured bindings (except
+  // bit-fields, which have no address) are captured; inner names shadow
+  // outer ones.
+  int shadowed = 1;
+  int &ref = a;
+  Hidden hidden;
+  auto [first, second] = std::pair<int, int>{8, 9};
+  auto [flag, whole] = Bits{0, 10};
+  {
+    int shadowed = 2;
 #include INSPECTOR
-  return lambda(Local{}.get(0));
+    (void)shadowed;
+  }
+  (void)shadowed;
+  (void)flag;
+  return lambda(Local{}.get(0)) + ref + hidden.value + first + second + whole -
+         35;
 }

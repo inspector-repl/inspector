@@ -5,7 +5,7 @@
   ];
 
   perSystem =
-    { pkgs, ... }:
+    { ... }:
     {
       treefmt = {
         projectRootFile = "flake.nix";
@@ -14,23 +14,7 @@
           nixfmt.enable = true;
           clang-format.enable = true;
           cmake-format.enable = true;
-          ruff-check.enable = true;
-          ruff-format.enable = true;
           shellcheck.enable = true;
-          mypy = {
-            enable = true;
-            directories = {
-              "python" = {
-                modules = [ "inspector" ];
-                options = [
-                  "--strict"
-                ];
-                extraPythonPackages = [
-                  pkgs.python3.pkgs.libclang
-                ];
-              };
-            };
-          };
         };
       };
     };
