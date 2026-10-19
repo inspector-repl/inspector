@@ -1,5 +1,8 @@
+find_package(GTest REQUIRED)
+
 add_executable(prelude prelude.cpp)
 target_include_directories(prelude PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(prelude PRIVATE GTest::gtest_main)
 add_test(NAME prelude COMMAND prelude)
 
 # Same path users take with make/autotools/meson: CXX=inspector-c++.
@@ -13,11 +16,17 @@ add_custom_command(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(e2e_program ALL DEPENDS ${_e2e_bin})
 
-add_test(NAME e2e COMMAND ${Python3_EXECUTABLE}
-                          ${CMAKE_CURRENT_SOURCE_DIR}/e2e.py ${_e2e_bin})
-add_test(NAME repl_tty
-         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/repl_tty.py
-                 $<TARGET_FILE:inspector-repl> ${_e2e_bin})
+# Takes the program as argument so the build-system examples reuse it.
+add_executable(inspector-e2e e2e.cpp)
+target_compile_definitions(inspector-e2e
+                           PRIVATE INSPECTOR_LLVM_MAJOR=${LLVM_VERSION_MAJOR})
+target_link_libraries(inspector-e2e PRIVATE inspector-client GTest::gmock)
+add_test(NAME e2e COMMAND inspector-e2e ${_e2e_bin})
 
-set_tests_properties(e2e PROPERTIES ENVIRONMENT
-                                    INSPECTOR_LLVM_MAJOR=${LLVM_VERSION_MAJOR})
+add_executable(inspector-repl-tty repl_tty.cpp)
+target_link_libraries(inspector-repl-tty PRIVATE GTest::gmock
+                                                 $<$<PLATFORM_ID:Linux>:util>)
+add_test(NAME repl_tty COMMAND inspector-repl-tty $<TARGET_FILE:inspector-repl>
+                               ${_e2e_bin})
+
+set_tests_properties(e2e repl_tty PROPERTIES TIMEOUT 300)
