@@ -41,6 +41,14 @@ def main() -> None:
             conn.sendall(json.dumps({"input": stmt}).encode() + b"\0")
             return str(recv()["value"]).strip()
 
+        def complete(text: str) -> list[str]:
+            conn.sendall(json.dumps({"complete": text}).encode() + b"\0")
+            reply = recv()
+            names = reply["completions"]
+            assert isinstance(names, list)
+            print(f"complete {text!r} => prefix {reply['prefix']!r} {names[:8]}")
+            return [str(n) for n in names]
+
         loc = recv()
         print("location:", loc)
         if "& a = *(" not in str(loc.get("locals")):
@@ -73,6 +81,12 @@ def main() -> None:
             print(f"{stmt} => {got!r}")
             if want not in got or (not want and got):
                 raise SystemExit(f"expected {want!r} in {got!r}")
+        # Locals, members of library types and names declared in the REPL.
+        for text, want in {"b.si": "size", "c + b.si": "size", "c": "c"}.items():
+            if want not in complete(text):
+                raise SystemExit(f"expected {want!r} completing {text!r}")
+        if any(n.startswith("_") for n in complete("b.")):
+            raise SystemExit("reserved names leaked into completions")
         ask(".quit")
         if proc.wait(timeout=60) != 0:
             raise SystemExit(f"program exited with {proc.returncode}")

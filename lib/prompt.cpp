@@ -19,6 +19,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <utility>
+#include <vector>
 
 using namespace inspector;
 
@@ -111,7 +112,17 @@ void Prompt::sendResult(const Reply &reply) const {
       llvm::json::Object{{"value", reply.value}, {"error", reply.error}}));
 }
 
-auto Prompt::getCppStatement() -> std::string {
+void Prompt::sendCompletions(const std::vector<std::string> &names,
+                             const std::string &prefix) const {
+  llvm::json::Array list;
+  for (const auto &name : names) {
+    list.emplace_back(name);
+  }
+  send(toJson(llvm::json::Object{{"completions", std::move(list)},
+                                 {"prefix", prefix}}));
+}
+
+auto Prompt::getRequest() -> Request {
   constexpr size_t chunkSize = 4096;
   size_t end = 0;
   while ((end = pending.find('\0')) == std::string::npos) {
@@ -129,7 +140,11 @@ auto Prompt::getCppStatement() -> std::string {
                        llvm::toString(message.takeError())};
   }
   const auto *object = message->getAsObject();
-  const auto input =
-      object != nullptr ? object->getString("input") : std::nullopt;
-  return input.value_or("").str();
+  if (object == nullptr) {
+    return {Request::Kind::Input, ""};
+  }
+  if (const auto text = object->getString("complete")) {
+    return {Request::Kind::Complete, text->str()};
+  }
+  return {Request::Kind::Input, object->getString("input").value_or("").str()};
 }

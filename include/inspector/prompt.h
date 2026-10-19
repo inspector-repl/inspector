@@ -1,14 +1,23 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace inspector {
 
 struct Reply {
   std::string value;
   bool error;
+};
+
+// A message from the REPL: a statement to run, or text to complete.
+struct Request {
+  enum class Kind : std::uint8_t { Input, Complete };
+  Kind kind;
+  std::string text;
 };
 
 struct Disconnected : std::runtime_error {
@@ -37,8 +46,10 @@ public:
                              const std::string &locals) const;
   void sendReady(const Reply &startup) const;
   void sendResult(const Reply &reply) const;
+  void sendCompletions(const std::vector<std::string> &names,
+                       const std::string &prefix) const;
   // Throws Disconnected when the REPL hangs up.
-  auto getCppStatement() -> std::string;
+  auto getRequest() -> Request;
 };
 
 } // namespace inspector

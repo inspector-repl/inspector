@@ -1,4 +1,5 @@
 #include "inspector/repl.h"
+#include "completer.h"
 #include "inspector/prompt.h"
 
 #include <clang/AST/PrettyPrinter.h>
@@ -105,6 +106,7 @@ class Session {
   std::string printed; // written by inspector_repl::print inside the JIT
   std::string lastError;
   bool threw = false;
+  std::string statements; // successful input, so completion sees its names
   unsigned counter = 0;
 
   auto run(const std::string &code, clang::Value *value = nullptr) -> bool {
@@ -212,8 +214,15 @@ public:
     }
     diags.clear();
     const bool succeeded = run(input);
+    if (succeeded) {
+      statements += input + "\n";
+    }
     // Warnings on success (e.g. [[nodiscard]]) are noise in a REPL.
     return {succeeded ? "" : failure(), !succeeded};
+  }
+
+  [[nodiscard]] auto history() const -> const std::string & {
+    return statements;
   }
 };
 
@@ -249,16 +258,29 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
 
   Session session(**interp);
   prompt.sendReady(session.setup(declare, context));
+  // Built on the first completion request: the parse costs a few hundred ms.
+  std::unique_ptr<Completer> completer;
   while (true) {
-    const std::string statement = prompt.getCppStatement();
-    if (statement == ".quit" || statement == ".abort") {
+    const Request request = prompt.getRequest();
+    if (request.kind == Request::Kind::Complete) {
+      if (!completer) {
+        completer = std::make_unique<Completer>(
+            path, lineNumber,
+            (*interp)->getCompilerInstance()->getInvocation());
+      }
+      const Completions found =
+          completer->complete(session.history(), request.text);
+      prompt.sendCompletions(found.names, found.prefix);
+      continue;
+    }
+    if (request.text == ".quit" || request.text == ".abort") {
       prompt.sendResult({"", false});
-      if (statement == ".abort") {
+      if (request.text == ".abort") {
         std::exit(1); // NOLINT(concurrency-mt-unsafe): user asked to abort
       }
       return;
     }
-    prompt.sendResult(session.eval(statement));
+    prompt.sendResult(session.eval(request.text));
   }
 }
 
