@@ -64,6 +64,49 @@ TEST(Generate, KeepsHeadersOfParentDirectorySourcesInOutdir) {
               testing::StartsWith(fs::weakly_canonical(outdir).string()));
 }
 
+// Meson and CMake unity builds compile a generated file that only
+// #includes the real sources.
+TEST(Generate, FindsBreakpointsInUnityBuildSources) {
+  const inspector::test::TempDir tmp;
+  std::ofstream(tmp.path() / "t.cpp")
+      << "int main() {\n  int x = 1;\n#include INSPECTOR\n  return x;\n}\n";
+  std::ofstream(tmp.path() / "unity.cpp")
+      << "#include<" << (tmp.path() / "t.cpp").string() << ">\n";
+
+  const auto written = inspector::prebuild::generate(
+      {.directory = tmp.path(),
+       .source = "unity.cpp",
+       .flags = {"-I" INSPECTOR_SOURCE_INCLUDE_DIR},
+       .outdir = tmp.path() / ".inspector-includes"});
+
+  EXPECT_THAT(written, testing::SizeIs(1));
+}
+
+// Meson's unity files include sources as </abs/build/../src/x.cc>, and
+// __FILE__ keeps that spelling, so the header must be found under it.
+TEST(Generate, NamesHeadersAfterTheIncludeSpelling) {
+  const inspector::test::TempDir tmp;
+  fs::create_directories(tmp.path() / "src");
+  fs::create_directories(tmp.path() / "build");
+  std::ofstream(tmp.path() / "src" / "t.cpp")
+      << "int main() {\n  int x = 1;\n#include INSPECTOR\n  return x;\n}\n";
+  const std::string spelled =
+      (tmp.path() / "build" / ".." / "src" / "t.cpp").string();
+  std::ofstream(tmp.path() / "build" / "unity.cpp")
+      << "#include<" << spelled << ">\n";
+  const fs::path outdir = tmp.path() / "build" / ".inspector-includes";
+
+  const auto written = inspector::prebuild::generate(
+      {.directory = tmp.path() / "build",
+       .source = "unity.cpp",
+       .flags = {"-I" INSPECTOR_SOURCE_INCLUDE_DIR},
+       .outdir = outdir});
+
+  ASSERT_THAT(written, testing::SizeIs(1));
+  EXPECT_TRUE(fs::exists(inspector::driver::includeRoot(outdir) / "inspector" /
+                         ("\"" + spelled + "\"-3")));
+}
+
 TEST(EscapeCString, EscapesBytesNotCodePoints) {
   EXPECT_EQ(escapeCString("a\"b\\\n\xc3\xa4"), "a\\042b\\134\\012\\303\\244");
 }

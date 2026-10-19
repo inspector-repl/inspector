@@ -83,6 +83,12 @@ auto env(const char *name, std::string fallback) -> std::string {
   return value != nullptr ? std::string(value) : std::move(fallback);
 }
 
+auto isSource(std::string_view path) -> bool {
+  return std::ranges::any_of(
+      sourceSuffixes,
+      [&](std::string_view suffix) -> bool { return path.ends_with(suffix); });
+}
+
 auto splitCommand(const std::vector<std::string> &args) -> Split {
   Split split;
   for (size_t i = 0; i < args.size(); ++i) {
@@ -98,11 +104,7 @@ auto splitCommand(const std::vector<std::string> &args) -> Split {
       if (keep) {
         split.flags.push_back(value);
       }
-    } else if (!isFlag &&
-               std::ranges::any_of(sourceSuffixes,
-                                   [&](std::string_view suffix) -> bool {
-                                     return arg.ends_with(suffix);
-                                   })) {
+    } else if (!isFlag && isSource(arg)) {
       split.sources.push_back(arg);
     }
   }

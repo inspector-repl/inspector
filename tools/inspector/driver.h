@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Compiler command line handling shared by `inspector wrap`,
@@ -28,6 +29,8 @@ auto paths() -> const Paths &;
 // Value of environment variable `name`, or `fallback`. Only called before
 // any worker thread starts.
 auto env(const char *name, std::string fallback = "") -> std::string;
+
+auto isSource(std::string_view path) -> bool;
 
 struct Split {
   std::vector<std::string> sources;
