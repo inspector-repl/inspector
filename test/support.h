@@ -2,9 +2,11 @@
 
 #include <array>
 #include <cerrno>
+#include <csignal> // NOLINT(misc-include-cleaner): SIGKILL
 #include <cstdlib>
 #include <fcntl.h>
 #include <filesystem>
+#include <signal.h> // NOLINT(modernize-deprecated-headers): kill is POSIX
 #include <spawn.h>
 #include <stdexcept>
 #include <string>
@@ -12,6 +14,7 @@
 #include <sys/wait.h>
 #include <system_error>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 // Not declared by <unistd.h> on macOS.
@@ -61,11 +64,12 @@ class Child {
   pid_t pid = 0;
 
 public:
-  // Starts `program` with the current environment plus `extraEnv`,
-  // optionally writing its stderr to a file.
-  explicit Child(std::string program,
+  // Starts `argv` with the current environment plus `extraEnv`, optionally
+  // writing its stderr, or with `allOutput` also its stdout, to a file.
+  explicit Child(std::vector<std::string> argv,
                  const std::filesystem::path &stderrPath = {},
-                 std::vector<std::string> extraEnv = {}) {
+                 std::vector<std::string> extraEnv = {},
+                 bool allOutput = false) {
     std::vector<char *> env;
     for (char **var = environ; *var != nullptr; ++var) {
       env.push_back(*var);
@@ -74,25 +78,47 @@ public:
       env.push_back(var.data());
     }
     env.push_back(nullptr);
+    std::vector<char *> args;
+    args.reserve(argv.size() + 1);
+    for (std::string &arg : argv) {
+      args.push_back(arg.data());
+    }
+    args.push_back(nullptr);
     posix_spawn_file_actions_t actions{};
     posix_spawn_file_actions_init(&actions);
     if (!stderrPath.empty()) {
+      constexpr mode_t ownerOnly = 0600;
       posix_spawn_file_actions_addopen(&actions, STDERR_FILENO,
                                        stderrPath.c_str(),
-                                       O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                                       O_WRONLY | O_CREAT | O_TRUNC, ownerOnly);
+      if (allOutput) {
+        posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO,
+                                         STDOUT_FILENO);
+      }
     }
-    std::array<char *, 2> argv{program.data(), nullptr};
-    const int err = posix_spawn(&pid, program.c_str(), &actions, nullptr,
-                                argv.data(), env.data());
+    const int err = posix_spawn(&pid, args.front(), &actions, nullptr,
+                                args.data(), env.data());
     posix_spawn_file_actions_destroy(&actions);
     if (err != 0) {
-      throw std::system_error(err, std::generic_category(), "spawn " + program);
+      throw std::system_error(err, std::generic_category(),
+                              "spawn " + argv.front());
     }
   }
+  explicit Child(const char *program,
+                 const std::filesystem::path &stderrPath = {},
+                 std::vector<std::string> extraEnv = {})
+      : Child(std::vector<std::string>{program}, stderrPath,
+              std::move(extraEnv)) {}
+
   // A pid from forkpty.
   explicit Child(pid_t pid) : pid(pid) {}
 
   [[nodiscard]] auto id() const -> pid_t { return pid; }
+
+  void kill() const noexcept {
+    // The header declaring SIGKILL differs between libcs.
+    ::kill(pid, SIGKILL); // NOLINT(misc-include-cleaner)
+  }
 
   // Exit code, or 128 + signal like a shell; -1 if waiting failed.
   [[nodiscard]] auto wait() const noexcept -> int {

@@ -1,9 +1,11 @@
 // inspector-repl: waits for instrumented programs to reach INSPECTOR and
 // gives the user a C++ prompt that runs inside them.
 
+#include "command.h"
 #include "connection.h"
 #include "highlight.h"
 #include "inspector/prompt.h"
+#include "source.h"
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/JSON.h>
@@ -12,17 +14,13 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstddef>
-#include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <regex>
-#include <sstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <unistd.h>
-#include <utility>
 #include <vector>
 
 using namespace inspector;
@@ -81,46 +79,7 @@ auto replxxColor(Style style) -> Replxx::Color {
   return Replxx::Color::DEFAULT;
 }
 
-auto historyPath() -> std::filesystem::path {
-  // NOLINTBEGIN(concurrency-mt-unsafe): nothing modifies the environment
-  const char *state = std::getenv("XDG_STATE_HOME");
-  const char *home = std::getenv("HOME");
-  // NOLINTEND(concurrency-mt-unsafe)
-  const std::filesystem::path base =
-      state != nullptr && *state != '\0'
-          ? std::filesystem::path(state)
-          : std::filesystem::path(home != nullptr ? home : ".") / ".local" /
-                "state";
-  return base / "inspector" / "history";
-}
-
-auto readLines(const std::string &path) -> std::vector<std::string> {
-  std::vector<std::string> lines;
-  std::ifstream file(path);
-  for (std::string line; std::getline(file, line);) {
-    lines.push_back(std::move(line));
-  }
-  return lines;
-}
-
-struct Local {
-  std::string name;
-  std::string type;
-};
-
-// Recovers (name, type) from the generated reference prelude.
-auto parseLocals(const std::string &prelude) -> std::vector<Local> {
-  static const std::regex decl(R"(^inspector_repl::type<(.*)>& (\w+) = \*\()");
-  std::vector<Local> out;
-  std::istringstream lines(prelude);
-  for (std::string line; std::getline(lines, line);) {
-    std::smatch match;
-    if (std::regex_search(line, match, decl)) {
-      out.push_back({match.str(2), match.str(1)});
-    }
-  }
-  return out;
-}
+auto historyPath() -> std::filesystem::path { return stateDir() / "history"; }
 
 class Breakpoint {
   Connection *conn;
@@ -281,6 +240,11 @@ public:
 };
 
 auto serve() -> int {
+  if (serverRunning()) {
+    std::cerr << "inspector-repl: a background server owns the socket, "
+                 "`inspector-repl stop` ends it\n";
+    return 1;
+  }
   const Listener listener(socketPath());
   std::filesystem::create_directories(historyPath().parent_path());
   Replxx editor(std::cin, std::cout, STDIN_FILENO, STDOUT_FILENO,
@@ -303,8 +267,12 @@ auto serve() -> int {
 
 } // namespace
 
-auto main() -> int {
+auto main(int argc, char **argv) -> int {
   try {
+    if (argc > 1) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic): argv
+      return runCommand({std::next(argv), std::next(argv, argc)});
+    }
     return serve();
   } catch (const std::exception &e) {
     std::cerr << "inspector-repl: " << e.what() << "\n";

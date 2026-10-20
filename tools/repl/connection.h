@@ -2,6 +2,7 @@
 
 #include <llvm/Support/JSON.h>
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -27,7 +28,12 @@ public:
   }
   // Blocks until a program connects; returns its socket.
   [[nodiscard]] auto accept() const -> int;
+  // False if nobody connected within `timeout`.
+  [[nodiscard]] auto wait(std::chrono::milliseconds timeout) const -> bool;
 };
+
+// Socket connected to `path`, or -1 if nobody listens there.
+auto connectTo(const std::filesystem::path &path) -> int;
 
 // One program stopped at a breakpoint: NUL-delimited JSON both ways.
 class Connection {
@@ -47,6 +53,8 @@ public:
   [[nodiscard]] auto send(llvm::json::Object message) const -> bool;
   // send() followed by receive().
   auto request(llvm::json::Object message) -> std::optional<llvm::json::Object>;
+  // False if nothing arrived within `timeout`.
+  [[nodiscard]] auto wait(std::chrono::milliseconds timeout) const -> bool;
 };
 
 } // namespace inspector
