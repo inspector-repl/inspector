@@ -273,6 +273,17 @@ public:
     const bool wantValue =
         input.back() != ';' && input.back() != '}' && input.front() != '#';
     const std::string type = wantValue ? valueType(input) : "";
+    if (wantValue && type.empty() && input.find('[') != std::string::npos) {
+      // decltype rejects lambdas before C++20.
+      const std::string var = fresh("__inspector_v");
+      diags.clear();
+      if (run("auto &&" + var + " = (" + input + ");")) {
+        return show(var);
+      }
+      if (threw || linkFailed) {
+        return {lastError, true};
+      }
+    }
     if (!type.empty()) {
       const std::string var = fresh("__inspector_v");
       diags.clear();

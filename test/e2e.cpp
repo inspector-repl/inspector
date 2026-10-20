@@ -224,6 +224,12 @@ TEST_F(Session, LinksAcrossLargeMappings) {
   EXPECT_THAT(ask("local()"), HasSubstr("3"));
 }
 
+TEST_F(Session, CallsLambdas) {
+  EXPECT_THAT(ask("[] { return 5; }()"), HasSubstr("5"));
+  EXPECT_EQ(ask("auto twice = [](int x) { return 2 * x; };"), "");
+  EXPECT_THAT(ask("twice(a)"), HasSubstr("2"));
+}
+
 TEST_F(Session, OutlivesThreadLocals) {
 #ifdef __APPLE__
   GTEST_SKIP() << "the JIT lacks emulated TLS (___emutls_get_address)";
