@@ -9,7 +9,7 @@ target_compile_definitions(inspector-client PUBLIC ${_llvm_defs})
 target_compile_options(inspector-client PRIVATE -Wall -Wextra)
 target_link_libraries(inspector-client PUBLIC ${INSPECTOR_CLANG_LIBS})
 
-add_executable(inspector-repl main.cpp highlight.cpp)
+add_executable(inspector-repl main.cpp command.cpp highlight.cpp source.cpp)
 # Next to the `inspector` stub, where `inspector repl` looks for it.
 set_target_properties(inspector-repl PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                                 ${PROJECT_BINARY_DIR})

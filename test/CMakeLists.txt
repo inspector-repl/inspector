@@ -37,4 +37,9 @@ target_link_libraries(inspector-repl-tty PRIVATE GTest::gmock
 add_test(NAME repl_tty COMMAND inspector-repl-tty $<TARGET_FILE:inspector-repl>
                                ${_e2e_bin})
 
-set_tests_properties(e2e repl_tty PROPERTIES TIMEOUT 300)
+add_executable(inspector-command command.cpp)
+target_link_libraries(inspector-command PRIVATE inspector-client GTest::gmock)
+add_test(NAME command COMMAND inspector-command $<TARGET_FILE:inspector-repl>
+                              ${_e2e_bin})
+
+set_tests_properties(e2e repl_tty command PROPERTIES TIMEOUT 300)

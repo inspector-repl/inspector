@@ -32,6 +32,7 @@ constexpr const char *usage =
     R"(usage: inspector <command> [args...]
 
   repl                         wait for programs to reach INSPECTOR
+  repl eval|continue|stop      the same without a terminal, see `repl -h`
   wrap <compiler> [args...]    compile with INSPECTOR support
   prebuild [options] [sources...]
       -p, --compile-commands <file>   every file in compile_commands.json
@@ -171,11 +172,13 @@ auto prebuild(const std::vector<std::string> &rawArgs) -> int {
   return status;
 }
 
-auto repl() -> int {
+auto repl(const std::vector<std::string> &args) -> int {
   const fs::path sibling =
       inspector::driver::paths().binaries / "inspector-repl";
-  return inspector::driver::exec(
-      {fs::exists(sibling) ? sibling.string() : "inspector-repl"});
+  std::vector<std::string> argv{fs::exists(sibling) ? sibling.string()
+                                                    : "inspector-repl"};
+  argv.insert(argv.end(), args.begin(), args.end());
+  return inspector::driver::exec(argv);
 }
 
 auto run(const std::vector<std::string> &args) -> int {
@@ -199,7 +202,7 @@ auto run(const std::vector<std::string> &args) -> int {
     return 0;
   }
   if (command == "repl") {
-    return repl();
+    return repl(rest);
   }
   std::cerr << usage;
   return command == "-h" || command == "--help" ? 0 : 1;

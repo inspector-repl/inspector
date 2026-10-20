@@ -116,6 +116,27 @@ error: use of undeclared identifier 'undefined'
 - The REPL keeps running between breakpoints and programs; Ctrl-C while
   waiting exits.
 
+### Without a terminal
+
+For scripts, each command runs one step and exits:
+
+```console
+$ INSPECTOR_WAIT=1 ./main &
+$ inspector repl eval 'v.size()'
+stopped at main.cpp:12
+locals:
+  v: std::vector<int>
+(size_t) 3
+$ inspector repl continue
+continued
+```
+
+The first command starts a background server that holds stopped programs
+between commands. `inspector repl stop` ends it. `eval` waits up to `-t`
+seconds (default 30) for a program, reads code from stdin with `-` and
+prints JSON with `--json`. Exit codes: 0 ok, 1 error in the code, 2 no
+program stopped, 3 program disconnected, 124 timed out.
+
 ### Any build system: compiler wrapper
 
 `inspector-c++` wraps the real compiler (`$INSPECTOR_CXX`, default `c++`).
