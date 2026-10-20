@@ -6,43 +6,45 @@
     "cache.thalheim.io-1:R7msbosLEZKrxk/lKxf9BTjOOH7Ax3H0Qj0/6wiHOgc="
   ];
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
-    treefmt-nix.url = "github:numtide/treefmt-nix";
-    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    inputs@{ flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [
-        ./nix/packages/flake-module.nix
-        ./nix/devShells/flake-module.nix
-        ./nix/formatter/flake-module.nix
-        ./nix/checks/flake-module.nix
-      ];
-
-      systems = [
+    { self, nixpkgs }:
+    let
+      inherit (nixpkgs) lib;
+      forAllSystems = lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
       ];
+    in
+    {
+      packages = forAllSystems (
+        system: import ./nix/packages { pkgs = nixpkgs.legacyPackages.${system}; }
+      );
 
-      perSystem =
-        {
-          self',
-          pkgs,
-          ...
-        }:
-        {
-          checks =
-            let
-              packages = pkgs.lib.mapAttrs' (n: pkgs.lib.nameValuePair "package-${n}") self'.packages;
-              devShells = pkgs.lib.mapAttrs' (n: pkgs.lib.nameValuePair "devShell-${n}") self'.devShells;
-            in
-            packages // devShells;
-        };
+      devShells = forAllSystems (
+        system: import ./nix/devShells { pkgs = nixpkgs.legacyPackages.${system}; }
+      );
+
+      formatter = forAllSystems (
+        system: import ./nix/formatter { pkgs = nixpkgs.legacyPackages.${system}; }
+      );
+
+      checks = forAllSystems (
+        system:
+        let
+          prefix = name: lib.mapAttrs' (n: lib.nameValuePair "${name}-${n}");
+        in
+        import ./nix/checks {
+          pkgs = nixpkgs.legacyPackages.${system};
+          inspector = self.packages.${system}.default;
+        }
+        // prefix "package" self.packages.${system}
+        // prefix "devShell" self.devShells.${system}
+        // {
+          treefmt = self.formatter.${system}.check self;
+        }
+      );
     };
 }
