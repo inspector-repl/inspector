@@ -27,6 +27,7 @@
 #include <llvm/TargetParser/Host.h>
 
 #include <cctype>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -36,6 +37,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -458,6 +460,23 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
   }
 }
 
+// INSPECTOR_WAIT lets a program start before the REPL.
+auto connectPrompt() -> Prompt {
+  // NOLINTNEXTLINE(concurrency-mt-unsafe): nothing modifies the environment
+  const bool wait = std::getenv("INSPECTOR_WAIT") != nullptr;
+  constexpr std::chrono::milliseconds retry{100};
+  while (true) {
+    try {
+      return Prompt(socketPath());
+    } catch (Disconnected &) {
+      if (!wait) {
+        throw;
+      }
+      std::this_thread::sleep_for(retry);
+    }
+  }
+}
+
 } // namespace
 
 extern "C" void inspectorRunRepl(const char *path, unsigned lineNumber,
@@ -465,7 +484,7 @@ extern "C" void inspectorRunRepl(const char *path, unsigned lineNumber,
                                  const char *const *includes,
                                  const void *const *addresses) {
   try {
-    Prompt prompt(socketPath());
+    Prompt prompt = connectPrompt();
     runRepl(prompt, path, lineNumber, declare,
             fillAddresses(context, addresses), includes);
   } catch (Disconnected &e) {

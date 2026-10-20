@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <system_error>
 #include <unistd.h>
+#include <vector>
 
 // Not declared by <unistd.h> on macOS.
 extern "C" char **environ; // NOLINT(readability-redundant-declaration)
@@ -60,10 +61,19 @@ class Child {
   pid_t pid = 0;
 
 public:
-  // Starts `program` with the current environment, optionally writing its
-  // stderr to a file.
+  // Starts `program` with the current environment plus `extraEnv`,
+  // optionally writing its stderr to a file.
   explicit Child(std::string program,
-                 const std::filesystem::path &stderrPath = {}) {
+                 const std::filesystem::path &stderrPath = {},
+                 std::vector<std::string> extraEnv = {}) {
+    std::vector<char *> env;
+    for (char **var = environ; *var != nullptr; ++var) {
+      env.push_back(*var);
+    }
+    for (std::string &var : extraEnv) {
+      env.push_back(var.data());
+    }
+    env.push_back(nullptr);
     posix_spawn_file_actions_t actions{};
     posix_spawn_file_actions_init(&actions);
     if (!stderrPath.empty()) {
@@ -73,7 +83,7 @@ public:
     }
     std::array<char *, 2> argv{program.data(), nullptr};
     const int err = posix_spawn(&pid, program.c_str(), &actions, nullptr,
-                                argv.data(), environ);
+                                argv.data(), env.data());
     posix_spawn_file_actions_destroy(&actions);
     if (err != 0) {
       throw std::system_error(err, std::generic_category(), "spawn " + program);
