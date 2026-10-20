@@ -12,7 +12,10 @@
 #include <clang/Interpreter/Interpreter.h>
 #include <clang/Interpreter/Value.h>
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/ExecutionEngine/JITSymbol.h>
+#include <llvm/ExecutionEngine/Orc/AbsoluteSymbols.h>
 #include <llvm/ExecutionEngine/Orc/Core.h>
+#include <llvm/ExecutionEngine/Orc/CoreContainers.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
 #include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -137,14 +140,15 @@ class Session {
   DiagCapture diags;
   std::string printed; // written by inspector_repl::print inside the JIT
   std::string lastError;
-  std::string cause; // of the last JIT failure, retries don't repeat it
   bool threw = false;
+  bool linkFailed = false;
   std::string statements; // successful input, so completion sees its names
   unsigned counter = 0;
 
   auto run(const std::string &code, clang::Value *value = nullptr) -> bool {
     llvm::Error err = llvm::Error::success();
     threw = true;
+    linkFailed = false;
     try {
       err = interp.ParseAndExecute(code, value);
     } catch (const std::exception &e) {
@@ -156,18 +160,30 @@ class Session {
       return false;
     }
     threw = false;
-    if (err) {
-      // JIT link errors (e.g. missing symbols) don't go through diagnostics.
-      std::string causes = jitErrors.take();
-      if (!causes.empty()) {
-        cause = std::move(causes);
-      }
-      std::string full = llvm::toString(std::move(err));
-      lastError = cause.empty() ? std::move(full) : cause;
-      return false;
+    linkFailed = false;
+    if (!err) {
+      return true;
     }
-    cause.clear();
-    return true;
+    // JIT link errors (e.g. missing symbols) don't go through diagnostics.
+    const std::string cause = jitErrors.take();
+    // Undo leaves the initializer queued, a failing runCtors() drains it.
+    if (err.isA<llvm::orc::FailedToMaterialize>()) {
+      llvm::consumeError(interp.Undo());
+      if (auto engine = interp.getExecutionEngine()) {
+        llvm::consumeError(engine->runCtors());
+      } else {
+        llvm::consumeError(engine.takeError());
+      }
+      jitErrors.take();
+    }
+    linkFailed = true;
+    if (cause.empty()) {
+      lastError = llvm::toString(std::move(err));
+    } else {
+      llvm::consumeError(std::move(err));
+      lastError = cause;
+    }
+    return false;
   }
 
   auto failure() -> std::string {
@@ -257,6 +273,17 @@ public:
     const bool wantValue =
         input.back() != ';' && input.back() != '}' && input.front() != '#';
     const std::string type = wantValue ? valueType(input) : "";
+    if (wantValue && type.empty() && input.find('[') != std::string::npos) {
+      // decltype rejects lambdas before C++20.
+      const std::string var = fresh("__inspector_v");
+      diags.clear();
+      if (run("auto &&" + var + " = (" + input + ");")) {
+        return show(var);
+      }
+      if (threw || linkFailed) {
+        return {lastError, true};
+      }
+    }
     if (!type.empty()) {
       const std::string var = fresh("__inspector_v");
       diags.clear();
@@ -266,7 +293,7 @@ public:
         return show(var);
       }
       // Re-running would repeat side effects that led up to the throw.
-      if (threw) {
+      if (threw || linkFailed) {
         return {lastError, true};
       }
     }
@@ -312,6 +339,26 @@ auto executorBuilder(JitErrors &jitErrors)
         llvm::consumeError(llvm::orc::enableDebuggerSupport(lljit));
         return llvm::Error::success();
       });
+  jit->setPlatformSetUp(
+      [](llvm::orc::LLJIT &lljit) -> llvm::Expected<llvm::orc::JITDylibSP> {
+        auto platform = llvm::orc::setUpGenericLLVMIRPlatform(lljit);
+        if (!platform) {
+          return platform.takeError();
+        }
+        const char *atexit = inspector::compat::threadAtexitName();
+        if (atexit == nullptr) {
+          return platform;
+        }
+        llvm::orc::SymbolMap interposed;
+        interposed.try_emplace(lljit.mangleAndIntern(atexit),
+                               inspector::compat::threadAtexit(),
+                               llvm::JITSymbolFlags::Exported);
+        if (auto err = (*platform)->define(
+                llvm::orc::absoluteSymbols(std::move(interposed)))) {
+          return err;
+        }
+        return platform;
+      });
   // Address space only: pages are committed as modules are linked.
   constexpr std::size_t slab = std::size_t{1} << 30U;
   auto memory = llvm::orc::MapperJITLinkMemoryManager::CreateWithMapper<
@@ -327,6 +374,23 @@ auto executorBuilder(JitErrors &jitErrors)
   builder->JITBuilder = std::move(jit);
   return builder;
 }
+
+// thread_local destructors run at thread exit, after the session.
+struct InterpreterOwner {
+  std::unique_ptr<clang::Interpreter> interp;
+  explicit InterpreterOwner(std::unique_ptr<clang::Interpreter> interp)
+      : interp(std::move(interp)) {}
+  InterpreterOwner(const InterpreterOwner &) = delete;
+  InterpreterOwner(InterpreterOwner &&) = delete;
+  auto operator=(const InterpreterOwner &) -> InterpreterOwner & = delete;
+  auto operator=(InterpreterOwner &&) -> InterpreterOwner & = delete;
+  ~InterpreterOwner() {
+    if (inspector::compat::threadLocalsRegistered()) {
+      // NOLINTNEXTLINE(bugprone-unused-return-value): leaked on purpose
+      interp.release();
+    }
+  }
+};
 
 void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
              const char *declare, const std::string &context,
@@ -364,8 +428,9 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
     prompt.sendReady({llvm::toString(interp.takeError()), true});
     return;
   }
+  const InterpreterOwner owner{std::move(*interp)};
 
-  Session session(**interp, jitErrors);
+  Session session(*owner.interp, jitErrors);
   prompt.sendReady(session.setup(declare, context));
   // Built on the first completion request: the parse costs a few hundred ms.
   std::unique_ptr<Completer> completer;
@@ -375,7 +440,7 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
       if (!completer) {
         completer = std::make_unique<Completer>(
             path, lineNumber,
-            (*interp)->getCompilerInstance()->getInvocation());
+            owner.interp->getCompilerInstance()->getInvocation());
       }
       const Completions found =
           completer->complete(session.history(), request.text);
