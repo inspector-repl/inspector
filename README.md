@@ -137,6 +137,7 @@ Environment variables:
 | `INSPECTOR_SCAN_ALL` | parse every file, not only those containing `INSPECTOR` |
 | `INSPECTOR_NO_LINK` | don't add `-linspector` when linking |
 | `INSPECTOR_REQUIRED` | exit instead of continuing when no REPL is listening |
+| `INSPECTOR_WAIT` | wait until a REPL listens instead of continuing |
 
 ### CMake
 

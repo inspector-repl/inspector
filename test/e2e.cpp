@@ -9,11 +9,13 @@
 #include <gtest/gtest.h>
 #include <llvm/Support/JSON.h>
 
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 using inspector::Connection;
@@ -247,6 +249,19 @@ TEST(NoListener, ProgramContinues) {
   std::ifstream file(log);
   EXPECT_THAT(std::string(std::istreambuf_iterator<char>(file), {}),
               HasSubstr("continuing"));
+}
+
+TEST(NoListener, WaitsWhenAsked) {
+  const TempDir tmp;
+  const Child child(program(), {}, {"INSPECTOR_WAIT=1"});
+  constexpr std::chrono::milliseconds late{500};
+  std::this_thread::sleep_for(late);
+  {
+    const Listener listener(tmp.socket());
+    Connection conn(listener.accept());
+    EXPECT_TRUE(conn.receive().has_value());
+  }
+  EXPECT_EQ(child.wait(), 0);
 }
 
 } // namespace
