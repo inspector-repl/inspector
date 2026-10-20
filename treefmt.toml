@@ -1,0 +1,19 @@
+excludes = ["*.lock", "third_party/**"]
+
+[formatter.clang-format]
+command = "clang-format"
+options = ["-i"]
+includes = ["*.c", "*.cpp", "*.h", "*.hpp"]
+
+[formatter.cmake-format]
+command = "cmake-format"
+options = ["--in-place"]
+includes = ["*.cmake", "CMakeLists.txt"]
+
+[formatter.nixfmt]
+command = "nixfmt"
+includes = ["*.nix"]
+
+[formatter.shellcheck]
+command = "shellcheck"
+includes = ["*.sh"]
