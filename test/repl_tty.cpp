@@ -6,12 +6,14 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstddef>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <signal.h> // NOLINT(modernize-deprecated-headers): kill is POSIX
 #include <sstream>
@@ -58,6 +60,46 @@ class Tty {
   Child child;
   std::string seen;
 
+  // Reads until `done(output, quiet)` returns where the wanted output
+  // ends; `quiet` means nothing arrived for a moment.
+  template <typename Done>
+  auto readUntil(const std::string &what, Done done) -> std::string {
+    static const std::regex ansi("\x1b\\[[0-9;?]*[A-Za-z]");
+    constexpr std::chrono::milliseconds settle{200};
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    bool quiet = false;
+    while (true) {
+      std::string plain = std::regex_replace(seen, ansi, "");
+      if (const auto end = done(plain, quiet)) {
+        seen = plain.substr(*end);
+        plain.resize(*end);
+        return plain;
+      }
+      const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+          deadline - std::chrono::steady_clock::now());
+      if (left.count() <= 0) {
+        ADD_FAILURE() << "timeout waiting for " << what << " in " << plain;
+        return "";
+      }
+      pollfd waiting{fd, POLLIN, 0};
+      const int ready =
+          poll(&waiting, 1, static_cast<int>(std::min(left, settle).count()));
+      quiet = ready == 0;
+      if (quiet) {
+        continue;
+      }
+      constexpr size_t chunkSize = 4096;
+      std::array<char, chunkSize> buf{};
+      const ssize_t got = ready < 0 ? -1 : read(fd, buf.data(), buf.size());
+      if (got <= 0) {
+        ADD_FAILURE() << "tty closed waiting for " << what << " in " << plain;
+        return "";
+      }
+      seen.append(buf.data(), static_cast<size_t>(got));
+    }
+  }
+
 public:
   explicit Tty(const std::string &program) : child(forkTty(program, fd)) {}
   ~Tty() {
@@ -71,34 +113,28 @@ public:
   auto operator=(Tty &&) -> Tty & = delete;
 
   // Output up to and including `want`, without escape sequences; "" on
-  // timeout or hang-up.
+  // timeout or hang-up. What follows `want` is kept for the next call, it
+  // may have arrived in the same read.
   auto expect(const std::string &want) -> std::string {
-    static const std::regex ansi("\x1b\\[[0-9;?]*[A-Za-z]");
-    const auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::seconds(60);
-    while (true) {
-      std::string plain = std::regex_replace(seen, ansi, "");
-      if (plain.find(want) != std::string::npos) {
-        seen.clear();
-        return plain;
-      }
-      const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
-          deadline - std::chrono::steady_clock::now());
-      pollfd waiting{fd, POLLIN, 0};
-      constexpr size_t chunkSize = 4096;
-      std::array<char, chunkSize> buf{};
-      if (left.count() <= 0 ||
-          poll(&waiting, 1, static_cast<int>(left.count())) <= 0) {
-        ADD_FAILURE() << "timeout waiting for " << want << " in " << plain;
-        return "";
-      }
-      const ssize_t got = read(fd, buf.data(), buf.size());
-      if (got <= 0) {
-        ADD_FAILURE() << "tty closed waiting for " << want << " in " << plain;
-        return "";
-      }
-      seen.append(buf.data(), static_cast<size_t>(got));
-    }
+    return readUntil(
+        want, [&](const std::string &plain, bool) -> std::optional<size_t> {
+          const size_t found = plain.find(want);
+          return found == std::string::npos
+                     ? std::nullopt
+                     : std::optional(found + want.size());
+        });
+  }
+
+  // Output until the REPL waits at its prompt. Keys typed earlier would
+  // reach the terminal in line mode, which turns Enter into a newline, and
+  // replxx redraws the prompt on every key, so seeing it isn't enough.
+  auto idle() -> std::string {
+    return readUntil(
+        "the prompt",
+        [](const std::string &plain, bool quiet) -> std::optional<size_t> {
+          return quiet && plain.ends_with("> ") ? std::optional(plain.size())
+                                                : std::nullopt;
+        });
   }
 
   void send(const std::string &keys) const {
@@ -112,27 +148,26 @@ TEST(ReplTty, CompletesEditsAndEvaluates) {
   Tty tty(paths().at(0));
   tty.expect("Waiting");
   const Child program(paths().at(1));
-  tty.expect("[0]");
+  // The prompt names the breakpoint.
+  EXPECT_THAT(tty.idle(), ContainsRegex(R"(test\.cpp:[0-9]+> $)"));
 
   // Tab completion of a library member, answered by the program.
   tty.send("b.si\t");
   tty.expect("b.size");
   tty.send("()\r");
-  EXPECT_THAT(tty.expect("[1]"), HasSubstr("(unsigned long) 12"));
+  EXPECT_THAT(tty.idle(), HasSubstr("(unsigned long) 12"));
 
   // Enter inside open brackets continues the input.
   tty.send("int z = (1 +\r2);\r");
-  tty.expect("[2]");
+  tty.idle();
   tty.send("z\r");
-  EXPECT_THAT(tty.expect("[3]"), HasSubstr("(int) 3"));
+  EXPECT_THAT(tty.idle(), HasSubstr("(int) 3"));
 
   // Ctrl-P recalls the previous line like readline.
-  // Each step waits for the prompt: keys typed before it reach the
-  // terminal in line mode, which turns Enter into a newline.
   tty.send("z + 1\r");
-  EXPECT_THAT(tty.expect("[4]"), HasSubstr("(int) 4"));
+  EXPECT_THAT(tty.idle(), HasSubstr("(int) 4"));
   tty.send("\x10\x10\r");
-  EXPECT_THAT(tty.expect("[5]"), HasSubstr("(int) 3"));
+  EXPECT_THAT(tty.idle(), HasSubstr("(int) 3"));
 
   tty.send(".continue\r");
   tty.expect("continuing program");
@@ -144,11 +179,11 @@ TEST(ReplTty, ListsLocalsWithValues) {
   Tty tty(paths().at(0));
   tty.expect("Waiting");
   const Child program(paths().at(1));
-  tty.expect("[0]");
+  tty.idle();
 
   // Columns: name, type, value.
   tty.send(".locals\r");
-  const std::string locals = tty.expect("[1]");
+  const std::string locals = tty.idle();
   EXPECT_THAT(locals, ContainsRegex("\n  a +int += 1\r"));
   EXPECT_THAT(locals, ContainsRegex("\n  b +[^ ]+ += \"Hello world!\""));
 
@@ -162,24 +197,23 @@ TEST(ReplTty, ListsMembers) {
   Tty tty(paths().at(0));
   tty.expect("Waiting");
   const Child program(paths().at(1));
-  tty.expect("[0]");
+  tty.idle();
 
   // Each class with its fields and methods, the class first, then bases.
   tty.send(".ls hidden\r");
-  const std::string listed = tty.expect("[1]");
+  const std::string listed = tty.idle();
   EXPECT_THAT(listed, ContainsRegex("Hidden\r\n  secret +int += 11\r"));
   EXPECT_THAT(listed, ContainsRegex("methods: peek\r\n[^\n]*Base\r"));
 
   // Long method lists wrap at the terminal width (80 without a size).
   tty.send(".ls b\r");
-  const std::string library = tty.expect("[2]");
+  const std::string library = tty.idle();
   tty.send(".ls a\r");
-  const std::string wrapped = library + tty.expect("[3]");
+  const std::string wrapped = library + tty.idle();
   std::istringstream lines(wrapped);
   for (std::string line; std::getline(lines, line);) {
     EXPECT_LE(line.size(), 81U) << line; // with the '\r'
   }
-
   EXPECT_THAT(wrapped, HasSubstr("int is not a class"));
 
   tty.send(".continue\r");

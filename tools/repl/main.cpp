@@ -121,7 +121,6 @@ class Breakpoint {
   std::string file;
   unsigned line;
   std::vector<Local> locals;
-  unsigned count = 0;
 
   static void show(const llvm::json::Object &reply) {
     std::string value = reply.getString("value").value_or("").str();
@@ -385,9 +384,11 @@ public:
     std::cout << "Type .help for commands.\n";
     configure();
     const std::string history = historyPath().string();
+    const std::string prompt = std::filesystem::path(file).filename().string() +
+                               ":" + std::to_string(line) + "> ";
     while (true) {
       errno = 0;
-      const char *raw = editor->input("[" + std::to_string(count) + "] ");
+      const char *raw = editor->input(prompt);
       if (raw == nullptr && errno == EAGAIN) {
         continue; // Ctrl-C clears the line
       }
@@ -396,7 +397,6 @@ public:
       if (cmd.empty()) {
         continue;
       }
-      ++count;
       editor->history_add(input);
       editor->history_sync(history);
       if (!dispatch(cmd, input)) {
