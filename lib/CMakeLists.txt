@@ -1,5 +1,5 @@
 add_library(inspector SHARED repl.cpp prompt.cpp completer.cpp
-                              compat.cpp)
+                              members.cpp compat.cpp)
 add_library(inspector::inspector ALIAS inspector)
 
 target_include_directories(

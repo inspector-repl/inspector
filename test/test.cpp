@@ -4,7 +4,13 @@
 #include <utility>
 
 namespace {
-class Hidden {
+struct Base {
+  int level = 2;
+  [[nodiscard]] auto describe() const -> int { return level; }
+};
+// Empty bases (tags, mixins) have nothing to list.
+struct Tag {};
+class Hidden : public Base, public Tag {
   int secret = 11;
 
 public:

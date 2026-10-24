@@ -18,9 +18,12 @@
 #include <filesystem>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <sys/ioctl.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 using namespace inspector;
@@ -33,7 +36,8 @@ constexpr std::string_view help =
 A trailing ';' suppresses the result. Multi-line input continues while
 brackets are open.
 
-  .locals      list variables captured at this breakpoint
+  .locals      list variables captured at this breakpoint with values
+  .ls EXPR     list fields (with values) and methods of a class or pointer
   .where       show the surrounding source again
   .continue    resume the program (also .quit, Ctrl-D)
   .abort       terminate the program
@@ -81,6 +85,36 @@ auto replxxColor(Style style) -> Replxx::Color {
 
 auto historyPath() -> std::filesystem::path { return stateDir() / "history"; }
 
+// The argument of `name` in `cmd` ("" if there is none), or nullopt if
+// `cmd` isn't `name`.
+auto argument(llvm::StringRef cmd, llvm::StringRef name)
+    -> std::optional<llvm::StringRef> {
+  if (!cmd.consume_front(name) || (!cmd.empty() && cmd.front() != ' ')) {
+    return std::nullopt;
+  }
+  return cmd.trim();
+}
+
+auto terminalWidth() -> size_t {
+  constexpr size_t fallback = 80;
+  // <sys/ioctl.h> provides these through platform-internal headers (glibc
+  // bits/, macOS sys/ttycom.h), and ioctl is variadic.
+  // NOLINTBEGIN(misc-include-cleaner,cppcoreguidelines-pro-type-vararg)
+  winsize size{};
+  const bool known =
+      ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col != 0;
+  // NOLINTEND(misc-include-cleaner,cppcoreguidelines-pro-type-vararg)
+  if (!known) {
+    return fallback;
+  }
+  return size.ws_col;
+}
+
+auto resumes(llvm::StringRef cmd) -> bool {
+  return cmd == ".continue" || cmd == ".quit" || cmd == ".c" || cmd == ".q" ||
+         cmd == ".abort";
+}
+
 class Breakpoint {
   Connection *conn;
   Replxx *editor;
@@ -119,13 +153,125 @@ class Breakpoint {
     }
   }
 
-  void showLocals() const {
+  struct Row {
+    std::string name;
+    std::string type;
+    std::string value;
+    bool error;
+  };
+
+  // Names, types and values in aligned columns. Long types don't widen
+  // the column for all others.
+  static void showTable(std::vector<Row> rows) {
+    constexpr size_t widest = 40;
+    // Template-heavy types (boost maps) would fill several lines.
+    constexpr size_t longest = 50;
+    for (Row &row : rows) {
+      if (row.type.size() > longest) {
+        row.type = row.type.substr(0, longest - 1) + "\u2026";
+      }
+    }
+    size_t nameWidth = 0;
+    size_t typeWidth = 0;
+    for (const Row &row : rows) {
+      nameWidth = std::max(nameWidth, row.name.size());
+      typeWidth = std::max(typeWidth, std::min(row.type.size(), widest));
+    }
+    for (const Row &row : rows) {
+      const size_t typePad =
+          row.type.size() < typeWidth ? typeWidth - row.type.size() : 0;
+      std::cout << "  " << bold << row.name << reset
+                << std::string(nameWidth - row.name.size() + 1, ' ') << gray
+                << row.type << reset << std::string(typePad + 1, ' ') << "= "
+                << (row.error ? red : reset) << row.value << reset << "\n";
+    }
+  }
+
+  static auto toRow(const llvm::json::Value &json) -> Row {
+    const llvm::json::Object *object = json.getAsObject();
+    if (object == nullptr) {
+      return {"", "", "?", true};
+    }
+    return {object->getString("name").value_or("").str(),
+            object->getString("type").value_or("").str(),
+            object->getString("value").value_or("").str(),
+            object->getBoolean("error").value_or(false)};
+  }
+
+  void showLocals() {
     if (locals.empty()) {
       std::cout << "no local variables captured\n";
+      return;
     }
+    llvm::json::Array names;
     for (const auto &local : locals) {
-      std::cout << "  " << bold << local.name << reset << " " << gray
-                << local.type << reset << "\n";
+      names.emplace_back(local.name);
+    }
+    const auto reply =
+        conn->request(llvm::json::Object{{"values", std::move(names)}});
+    const llvm::json::Array *values =
+        reply ? reply->getArray("values") : nullptr;
+    std::vector<Row> got;
+    if (values != nullptr) {
+      for (const auto &value : *values) {
+        got.push_back(toRow(value));
+      }
+    }
+    std::vector<Row> rows;
+    for (size_t i = 0; i < locals.size(); ++i) {
+      Row row{locals.at(i).name, locals.at(i).type, "?", true};
+      if (i < got.size()) {
+        row.value = got.at(i).value;
+        row.error = got.at(i).error;
+      }
+      rows.push_back(std::move(row));
+    }
+    showTable(rows);
+  }
+
+  static void showClass(const llvm::json::Object &cls) {
+    std::cout << bold << cls.getString("name").value_or("").str() << reset
+              << "\n";
+    std::vector<Row> rows;
+    if (const auto *fields = cls.getArray("fields")) {
+      for (const auto &field : *fields) {
+        rows.push_back(toRow(field));
+      }
+    }
+    showTable(rows);
+    if (const auto *methods = cls.getArray("methods");
+        methods != nullptr && !methods->empty()) {
+      const std::string label = "  methods:";
+      std::cout << gray << label << reset;
+      size_t column = label.size();
+      const size_t width = terminalWidth();
+      for (const auto &method : *methods) {
+        const std::string name = method.getAsString().value_or("").str();
+        if (column + 1 + name.size() > width && column > label.size()) {
+          std::cout << "\n" << std::string(label.size(), ' ');
+          column = label.size();
+        }
+        std::cout << " " << name;
+        column += 1 + name.size();
+      }
+      std::cout << "\n";
+    }
+  }
+
+  void showMembers(llvm::StringRef expr) {
+    const auto reply = conn->request(llvm::json::Object{{"ls", expr.str()}});
+    if (!reply) {
+      return;
+    }
+    const llvm::json::Array *classes = reply->getArray("classes");
+    if (classes == nullptr) {
+      show(*reply);
+      return;
+    }
+    for (const auto &entry : *classes) {
+      if (const auto *cls = entry.getAsObject()) {
+        showClass(*cls);
+      }
     }
   }
 
@@ -191,6 +337,42 @@ public:
         line(static_cast<unsigned>(spec.getInteger("line").value_or(0))),
         locals(parseLocals(spec.getString("locals").value_or("").str())) {}
 
+  // Evaluates `input` in the program; false once it hung up.
+  auto evaluate(const std::string &input) -> bool {
+    const auto reply = conn->request(llvm::json::Object{{"input", input}});
+    if (!reply) {
+      std::cout << "program disconnected.\n\n";
+      return false;
+    }
+    show(*reply);
+    return true;
+  }
+
+  // Handles one line of input; false once the program resumed or hung up.
+  auto dispatch(llvm::StringRef cmd, const std::string &input) -> bool {
+    if (cmd == ".help") {
+      std::cout << help << "\n";
+    } else if (cmd == ".locals") {
+      showLocals();
+    } else if (const auto expr = argument(cmd, ".ls")) {
+      if (expr->empty()) {
+        showLocals();
+      } else {
+        showMembers(*expr);
+      }
+    } else if (cmd == ".where") {
+      where();
+    } else if (resumes(cmd)) {
+      const bool abort = cmd == ".abort";
+      conn->request(llvm::json::Object{{"input", abort ? ".abort" : ".quit"}});
+      std::cout << (abort ? "program aborted.\n\n" : "continuing program.\n\n");
+      return false;
+    } else {
+      return evaluate(input);
+    }
+    return true;
+  }
+
   void run() {
     where();
     std::cout << "starting interpreter...\r" << std::flush;
@@ -217,25 +399,7 @@ public:
       ++count;
       editor->history_add(input);
       editor->history_sync(history);
-      if (cmd == ".help") {
-        std::cout << help << "\n";
-      } else if (cmd == ".locals") {
-        showLocals();
-      } else if (cmd == ".where") {
-        where();
-      } else if (cmd == ".continue" || cmd == ".quit" || cmd == ".c" ||
-                 cmd == ".q" || cmd == ".abort") {
-        const bool abort = cmd == ".abort";
-        conn->request(
-            llvm::json::Object{{"input", abort ? ".abort" : ".quit"}});
-        std::cout << (abort ? "program aborted.\n\n"
-                            : "continuing program.\n\n");
-        return;
-      } else if (const auto reply =
-                     conn->request(llvm::json::Object{{"input", input}})) {
-        show(*reply);
-      } else {
-        std::cout << "program disconnected.\n\n";
+      if (!dispatch(cmd, input)) {
         return;
       }
     }

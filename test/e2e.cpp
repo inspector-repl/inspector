@@ -13,9 +13,11 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using inspector::Connection;
@@ -24,8 +26,11 @@ using inspector::test::Child;
 using inspector::test::TempDir;
 using testing::Contains;
 using testing::Each;
+using testing::ElementsAre;
 using testing::HasSubstr;
 using testing::Not;
+using testing::Pair;
+using testing::SizeIs;
 using testing::StartsWith;
 
 namespace {
@@ -66,6 +71,49 @@ auto ask(const std::string &statement) -> std::string {
   std::string value = reply->getString("value").value_or("").str();
   value.erase(value.find_last_not_of(" \n") + 1);
   return value;
+}
+
+auto request(llvm::json::Object message) -> llvm::json::Object {
+  auto reply = stopped()->conn.request(std::move(message));
+  if (!reply) {
+    ADD_FAILURE() << "program hung up";
+    return {};
+  }
+  return std::move(*reply);
+}
+
+// One class of a `.ls` reply, flattened for matching.
+struct Listed {
+  std::string name;
+  std::map<std::string, std::string> fields; // name -> "type = value"
+  std::vector<std::string> methods;
+};
+
+auto ls(const std::string &expr) -> std::vector<Listed> {
+  std::vector<Listed> out;
+  const auto reply = request(llvm::json::Object{{"ls", expr}});
+  const auto *classes = reply.getArray("classes");
+  if (classes == nullptr) {
+    ADD_FAILURE() << "no classes for " << expr << ": "
+                  << reply.getString("value").value_or("").str();
+    return out;
+  }
+  for (const auto &entry : *classes) {
+    const auto *cls = entry.getAsObject();
+    Listed listed{cls->getString("name").value_or("").str(), {}, {}};
+    for (const auto &json : *cls->getArray("fields")) {
+      const auto *field = json.getAsObject();
+      listed.fields.emplace(field->getString("name").value_or("").str(),
+                            field->getString("type").value_or("").str() +
+                                " = " +
+                                field->getString("value").value_or("").str());
+    }
+    for (const auto &method : *cls->getArray("methods")) {
+      listed.methods.push_back(method.getAsString().value_or("").str());
+    }
+    out.push_back(std::move(listed));
+  }
+  return out;
 }
 
 auto complete(const std::string &text) -> std::vector<std::string> {
@@ -163,6 +211,84 @@ TEST_F(Session, ReadsPrivateMembers) {
     GTEST_SKIP() << "program is not test/test.cpp";
   }
   EXPECT_THAT(ask("hidden.secret"), HasSubstr("(int) 11"));
+}
+
+// Like Pry's ls: fields with values and methods, grouped by class, bases
+// after the class itself.
+TEST_F(Session, ListsMembers) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  const auto classes = ls("hidden");
+  ASSERT_THAT(classes, SizeIs(2));
+  EXPECT_THAT(classes.at(0).name, HasSubstr("Hidden"));
+  EXPECT_THAT(classes.at(0).fields, ElementsAre(Pair("secret", "int = 11"),
+                                                Pair("value", "int = 7")));
+  EXPECT_THAT(classes.at(0).methods, ElementsAre("peek"));
+}
+
+TEST_F(Session, ListsBaseMembersAfterTheClass) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  const auto classes = ls("hidden");
+  ASSERT_THAT(classes, SizeIs(2));
+  EXPECT_THAT(classes.at(1).name, HasSubstr("Base"));
+  EXPECT_THAT(classes.at(1).fields, ElementsAre(Pair("level", "int = 2")));
+  EXPECT_THAT(classes.at(1).methods, ElementsAre("describe"));
+}
+
+TEST_F(Session, ListsMembersThroughPointers) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  const auto classes = ls("&hidden");
+  ASSERT_THAT(classes, SizeIs(2));
+  EXPECT_THAT(classes.at(0).fields, Contains(Pair("value", "int = 7")));
+}
+
+// Library internals (`_M_*`) would drown the interesting members.
+TEST_F(Session, ListsWithoutReservedNames) {
+  const auto classes = ls("b");
+  ASSERT_THAT(classes, Not(SizeIs(0)));
+  EXPECT_THAT(classes.at(0).methods, Contains("size"));
+  for (const auto &cls : classes) {
+    EXPECT_THAT(cls.methods, Each(Not(StartsWith("_"))));
+    for (const auto &[name, value] : cls.fields) {
+      EXPECT_THAT(name, Not(StartsWith("_")));
+    }
+  }
+}
+
+TEST_F(Session, ListsOnlyClasses) {
+  const auto notClass = request(llvm::json::Object{{"ls", "a"}});
+  EXPECT_EQ(notClass.getBoolean("error"), true);
+  EXPECT_THAT(notClass.getString("value").value_or("").str(),
+              HasSubstr("int is not a class"));
+  const auto undefined = request(llvm::json::Object{{"ls", "nope"}});
+  EXPECT_EQ(undefined.getBoolean("error"), true);
+  EXPECT_THAT(undefined.getString("value").value_or("").str(),
+              HasSubstr("undeclared identifier"));
+}
+
+// `.locals` shows values, on one line each and without the type the
+// client already knows.
+TEST_F(Session, ShowsValuesBriefly) {
+  const auto reply = request(llvm::json::Object{
+      {"values", llvm::json::Array{"a", "b", "nope", "a == 1"}}});
+  const auto *values = reply.getArray("values");
+  ASSERT_NE(values, nullptr);
+  std::vector<std::pair<std::string, bool>> got;
+  for (const auto &json : *values) {
+    const auto *value = json.getAsObject();
+    got.emplace_back(value->getString("value").value_or("").str(),
+                     value->getBoolean("error").value_or(false));
+  }
+  ASSERT_THAT(got, SizeIs(4));
+  EXPECT_THAT(got.at(0), Pair("1", false));
+  EXPECT_THAT(got.at(1), Pair(R"("Hello world!")", false));
+  EXPECT_TRUE(got.at(2).second);
+  EXPECT_THAT(got.at(3), Pair("true", false));
 }
 
 TEST_F(Session, CallsFunctionsOfTheProgram) {
