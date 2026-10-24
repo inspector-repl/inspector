@@ -4,8 +4,12 @@
 #include <utility>
 
 namespace {
-struct Hidden {
+class Hidden {
+  int secret = 11;
+
+public:
   int value = 7;
+  [[nodiscard]] auto peek() const -> int { return secret; }
 };
 struct Bits {
   int flag : 1;
