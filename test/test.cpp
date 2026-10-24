@@ -49,6 +49,7 @@ int main(int argc, char **argv) {
   int shadowed = 1;
   int &ref = a;
   Hidden hidden;
+  Hidden *pointer = &hidden;
   auto [first, second] = std::pair<int, int>{8, 9};
   auto [flag, whole] = Bits{0, 10};
   {
@@ -58,6 +59,6 @@ int main(int argc, char **argv) {
   }
   (void)shadowed;
   (void)flag;
-  return lambda(Local{}.get(0)) + ref + hidden.value + first + second + whole -
-         35;
+  return lambda(Local{}.get(0)) + ref + pointer->value + first + second +
+         whole - 35;
 }

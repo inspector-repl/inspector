@@ -11,6 +11,7 @@
 #include <clang/Frontend/CompilerInvocation.h>
 #include <clang/Frontend/FrontendActions.h> // NOLINT(misc-include-cleaner): completes unique_ptr<SyntaxOnlyAction>
 #include <clang/Frontend/FrontendOptions.h>
+#include <clang/Lex/Lexer.h>
 #include <clang/Lex/Preprocessor.h>
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Sema/CodeCompleteConsumer.h>
@@ -51,7 +52,14 @@ class Consumer : public clang::CodeCompleteConsumer {
   Completions out;
 
 public:
-  Consumer() : CodeCompleteConsumer(clang::CodeCompleteOptions{}) {}
+  Consumer() : CodeCompleteConsumer(options()) {}
+
+  static auto options() -> clang::CodeCompleteOptions {
+    clang::CodeCompleteOptions opts;
+    // Members behind `.` on a pointer come with a fix-it to `->`.
+    opts.IncludeFixIts = true;
+    return opts;
+  }
   auto take() -> Completions { return std::move(out); }
 
   void ProcessCodeCompleteResults(clang::Sema &sema,
@@ -60,10 +68,23 @@ public:
                                   unsigned count) override {
     const llvm::StringRef prefix =
         sema.getPreprocessor().getCodeCompletionFilter();
-    out.prefix = prefix.str();
     const bool wantReserved = prefix.starts_with("_");
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic): C API
-    for (const auto &result : llvm::ArrayRef(results, count)) {
+    const llvm::ArrayRef all(results, count);
+    // The reply has one prefix. With a fix-it (`.` to `->`) every name
+    // carries its operator, so the prefix spans the typed `.` as well.
+    std::string removed;
+    for (const auto &result : all) {
+      if (!result.FixIts.empty()) {
+        removed = clang::Lexer::getSourceText(result.FixIts.front().RemoveRange,
+                                              sema.getSourceManager(),
+                                              sema.getLangOpts())
+                      .str();
+        break;
+      }
+    }
+    out.prefix = removed + prefix.str();
+    for (const auto &result : all) {
       llvm::StringRef name;
       if (result.Kind == clang::CodeCompletionResult::RK_Declaration) {
         if (result.Hidden ||
@@ -77,9 +98,14 @@ public:
       } else {
         continue;
       }
-      if (name.starts_with(prefix) && (wantReserved || !isReserved(name))) {
-        out.names.push_back(name.str());
+      if (!name.starts_with(prefix) || (!wantReserved && isReserved(name))) {
+        continue;
       }
+      std::string access = removed;
+      for (const auto &fix : result.FixIts) {
+        access = fix.CodeToInsert;
+      }
+      out.names.push_back(access + name.str());
     }
   }
 
