@@ -124,6 +124,14 @@ TEST(ReplTty, CompletesEditsAndEvaluates) {
   tty.send("z\r");
   EXPECT_THAT(tty.expect("[3]"), HasSubstr("(int) 3"));
 
+  // Ctrl-P recalls the previous line like readline.
+  // Each step waits for the prompt: keys typed before it reach the
+  // terminal in line mode, which turns Enter into a newline.
+  tty.send("z + 1\r");
+  EXPECT_THAT(tty.expect("[4]"), HasSubstr("(int) 4"));
+  tty.send("\x10\x10\r");
+  EXPECT_THAT(tty.expect("[5]"), HasSubstr("(int) 3"));
+
   tty.send(".continue\r");
   tty.expect("continuing program");
   EXPECT_EQ(program.wait(), 0);

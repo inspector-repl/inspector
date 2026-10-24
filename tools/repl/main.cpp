@@ -179,6 +179,9 @@ class Breakpoint {
                        }
                        return editor->invoke(Replxx::ACTION::COMMIT_LINE, code);
                      });
+    // replxx binds these to completion cycling, readline users expect history.
+    editor->bind_key_internal(Replxx::KEY::control('P'), "history_previous");
+    editor->bind_key_internal(Replxx::KEY::control('N'), "history_next");
   }
 
 public:
