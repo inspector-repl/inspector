@@ -12,6 +12,10 @@ target_compile_definitions(
   PRIVATE INSPECTOR_SOURCE_INCLUDE_DIR="${PROJECT_SOURCE_DIR}/include")
 add_test(NAME driver COMMAND driver-test)
 
+add_executable(history-test history.cpp)
+target_link_libraries(history-test PRIVATE replxx GTest::gmock_main)
+add_test(NAME history COMMAND history-test)
+
 # Same path users take with make/autotools/meson: CXX=inspector-c++.
 set(_e2e_bin ${CMAKE_CURRENT_BINARY_DIR}/test-proc)
 add_custom_command(
