@@ -17,15 +17,23 @@
 #include <cstddef>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <optional>
+#include <spawn.h>
+#include <stdlib.h> // NOLINT(modernize-deprecated-headers): mkstemps is POSIX
 #include <string>
 #include <string_view>
 #include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <utility>
 #include <vector>
+
+// Not declared by <unistd.h> on macOS.
+extern "C" char **environ; // NOLINT(readability-redundant-declaration)
 
 using namespace inspector;
 using replxx::Replxx;
@@ -39,7 +47,10 @@ brackets are open.
 
   .locals      list variables captured at this breakpoint with values
   .ls EXPR     list fields (with values) and methods of a class or pointer
-  .where       show the surrounding source again
+  .where [N]   show the surrounding source again, N lines around it
+  .edit        write input in $EDITOR, run it on exit
+  .edit NAME   open $EDITOR where NAME is defined (`.` for the breakpoint);
+               changes take effect when the program is rebuilt
   .continue    resume the program (also .quit, Ctrl-D)
   .abort       terminate the program
   .help        this message
@@ -116,12 +127,100 @@ auto resumes(llvm::StringRef cmd) -> bool {
          cmd == ".abort";
 }
 
+// Runs $VISUAL or $EDITOR (which may carry flags) on `args` through the
+// shell, like git does; true if it exited successfully.
+auto runEditor(std::vector<std::string> argv) -> bool {
+  argv.insert(argv.begin(),
+              {"sh", "-c", R"(exec ${VISUAL:-${EDITOR:-vi}} "$@")", "sh"});
+  std::vector<char *> pointers;
+  pointers.reserve(argv.size() + 1);
+  for (std::string &arg : argv) {
+    pointers.push_back(arg.data());
+  }
+  pointers.push_back(nullptr);
+  pid_t pid = 0;
+  if (posix_spawn(&pid, "/bin/sh", nullptr, nullptr, pointers.data(),
+                  environ) != 0) {
+    return false;
+  }
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+  }
+  return status == 0; // exited with 0, not killed
+}
+
 class Breakpoint {
   Connection *conn;
   Replxx *editor;
   std::string file;
   unsigned line;
   std::vector<Local> locals;
+  std::string lastInput; // what a bare .edit starts from
+  static constexpr unsigned defaultBefore = 5;
+  static constexpr unsigned defaultAfter = 3;
+
+  // Evaluates `input` in the program; false once it hung up.
+  auto evaluate(const std::string &input) -> bool {
+    const auto reply = conn->request(llvm::json::Object{{"input", input}});
+    if (!reply) {
+      std::cout << "program disconnected.\n\n";
+      return false;
+    }
+    show(*reply);
+    return true;
+  }
+
+  // Opens a temporary file seeded with the last input and runs what the
+  // editor leaves in it; false once the program hung up.
+  auto editInput() -> bool {
+    std::string pattern =
+        (std::filesystem::temp_directory_path() / "inspector-XXXXXX.cpp")
+            .string();
+    constexpr int suffix = 4; // ".cpp" keeps the editor's C++ mode
+    const int handle = mkstemps(pattern.data(), suffix);
+    if (handle < 0) {
+      std::cout << red << "cannot create a temporary file" << reset << "\n";
+      return true;
+    }
+    close(handle);
+    const std::filesystem::path path = pattern;
+    std::ofstream(path) << lastInput << (lastInput.empty() ? "" : "\n");
+    std::string code;
+    if (runEditor({path.string()})) {
+      std::ifstream edited(path);
+      code.assign(std::istreambuf_iterator<char>(edited), {});
+    }
+    std::filesystem::remove(path);
+    if (llvm::StringRef(code).trim().empty()) {
+      return true;
+    }
+    while (!code.empty() && code.back() == '\n') {
+      code.pop_back();
+    }
+    std::cout << colorize(code) << "\n";
+    lastInput = code;
+    editor->history_add(code);
+    return evaluate(code);
+  }
+
+  void openDefinition(llvm::StringRef name) {
+    std::string target = file;
+    unsigned targetLine = line;
+    if (name != ".") {
+      const auto reply =
+          conn->request(llvm::json::Object{{"locate", name.str()}});
+      if (!reply) {
+        return;
+      }
+      if (reply->getBoolean("error").value_or(false)) {
+        show(*reply);
+        return;
+      }
+      target = reply->getString("file").value_or("").str();
+      targetLine = static_cast<unsigned>(reply->getInteger("line").value_or(1));
+    }
+    runEditor({"+" + std::to_string(targetLine), target});
+  }
 
   static void show(const llvm::json::Object &reply) {
     std::string value = reply.getString("value").value_or("").str();
@@ -138,10 +237,13 @@ class Breakpoint {
     }
   }
 
-  void where() const {
+  // `around` lines on both sides, or a few more before than after.
+  void where(std::optional<unsigned> around) const {
+    const unsigned before = around.value_or(defaultBefore);
+    const unsigned after = around.value_or(defaultAfter);
     const auto lines = readLines(file);
-    const unsigned first = line > 5 ? line - 5 : 1;
-    const unsigned last = std::min<unsigned>(line + 3, lines.size());
+    const unsigned first = line > before ? line - before : 1;
+    const unsigned last = std::min<unsigned>(line + after, lines.size());
     std::cout << bold << "From: " << file << " @ line " << line << ":" << reset
               << "\n";
     const auto width = std::to_string(last).size();
@@ -351,17 +453,6 @@ public:
         line(static_cast<unsigned>(spec.getInteger("line").value_or(0))),
         locals(parseLocals(spec.getString("locals").value_or("").str())) {}
 
-  // Evaluates `input` in the program; false once it hung up.
-  auto evaluate(const std::string &input) -> bool {
-    const auto reply = conn->request(llvm::json::Object{{"input", input}});
-    if (!reply) {
-      std::cout << "program disconnected.\n\n";
-      return false;
-    }
-    show(*reply);
-    return true;
-  }
-
   // Handles one line of input; false once the program resumed or hung up.
   auto dispatch(llvm::StringRef cmd, const std::string &input) -> bool {
     if (cmd == ".help") {
@@ -374,8 +465,20 @@ public:
       } else {
         showMembers(*expr);
       }
-    } else if (cmd == ".where") {
-      where();
+    } else if (const auto arg = argument(cmd, ".where")) {
+      unsigned around = 0;
+      if (arg->empty()) {
+        where(std::nullopt);
+      } else if (!arg->getAsInteger(0, around)) {
+        where(around);
+      } else {
+        std::cout << red << "usage: .where [N]" << reset << "\n";
+      }
+    } else if (const auto name = argument(cmd, ".edit")) {
+      if (name->empty()) {
+        return editInput();
+      }
+      openDefinition(*name);
     } else if (resumes(cmd)) {
       const bool abort = cmd == ".abort";
       conn->request(llvm::json::Object{{"input", abort ? ".abort" : ".quit"}});
@@ -388,7 +491,7 @@ public:
   }
 
   void run() {
-    where();
+    where(std::nullopt);
     std::cout << "starting interpreter...\r" << std::flush;
     const auto ready = conn->receive();
     if (!ready) {
@@ -416,6 +519,9 @@ public:
       }
       editor->history_add(input);
       editor->history_sync(history);
+      if (!cmd.starts_with(".")) {
+        lastInput = input;
+      }
       if (!dispatch(cmd, input)) {
         return;
       }

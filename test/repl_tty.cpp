@@ -12,11 +12,15 @@
 #include <chrono>
 #include <csignal>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <regex>
 #include <signal.h> // NOLINT(modernize-deprecated-headers): kill is POSIX
 #include <sstream>
+#include <stdlib.h> // NOLINT(modernize-deprecated-headers): setenv is POSIX
 #include <string>
 #include <sys/poll.h>
 #include <sys/types.h>
@@ -104,8 +108,9 @@ public:
   explicit Tty(const std::string &program) : child(forkTty(program, fd)) {}
   ~Tty() {
     kill(child.id(), SIGINT);
-    (void)child.wait();
+    // On macOS, exit blocks closing the terminal until its output is read.
     close(fd);
+    (void)child.wait();
   }
   Tty(const Tty &) = delete;
   auto operator=(const Tty &) -> Tty & = delete;
@@ -142,6 +147,74 @@ public:
               static_cast<ssize_t>(keys.size()));
   }
 };
+
+// An $EDITOR that records its arguments and, given a file alone, replaces
+// its contents with `code`.
+auto fakeEditor(const TempDir &tmp, const std::string &code)
+    -> std::filesystem::path {
+  const auto script = tmp.path() / "editor";
+  std::ofstream(script) << "#!/bin/sh\n"
+                        << "echo \"$@\" > '" << (tmp.path() / "args").string()
+                        << "'\n"
+                        << "[ $# -eq 1 ] && printf '%s\\n' '" << code
+                        << "' > \"$1\"\n"
+                        << "exit 0\n";
+  std::filesystem::permissions(script, std::filesystem::perms::owner_all);
+  // Before the REPL starts, which inherits it; tests run no threads.
+  unsetenv("VISUAL");                  // NOLINT(concurrency-mt-unsafe)
+  setenv("EDITOR", script.c_str(), 1); // NOLINT(concurrency-mt-unsafe)
+  return tmp.path() / "args";
+}
+
+auto slurp(const std::filesystem::path &path) -> std::string {
+  std::ifstream file(path);
+  return {std::istreambuf_iterator<char>(file), {}};
+}
+
+TEST(ReplTty, ShowsMoreContext) {
+  const TempDir tmp;
+  Tty tty(paths().at(0));
+  tty.expect("Waiting");
+  const Child program(paths().at(1));
+  tty.idle();
+
+  tty.send(".where 1\r");
+  const std::string shown = tty.idle();
+  const std::regex numbered("\n(-->| {3}) +[0-9]+: ");
+  EXPECT_EQ(
+      std::distance(std::sregex_iterator(shown.begin(), shown.end(), numbered),
+                    std::sregex_iterator()),
+      3)
+      << shown;
+  EXPECT_THAT(shown, HasSubstr("--> "));
+
+  tty.send(".continue\r");
+  tty.expect("continuing program");
+  EXPECT_EQ(program.wait(), 0);
+}
+
+TEST(ReplTty, EditsInputAndOpensSources) {
+  const TempDir tmp;
+  const auto args = fakeEditor(tmp, "6 * 7");
+  Tty tty(paths().at(0));
+  tty.expect("Waiting");
+  const Child program(paths().at(1));
+  tty.idle();
+
+  // Without an argument the edited buffer is run.
+  tty.send(".edit\r");
+  EXPECT_THAT(tty.idle(), HasSubstr("(int) 42"));
+
+  tty.send(".edit Hidden\r");
+  tty.idle();
+  EXPECT_THAT(slurp(args), testing::MatchesRegex("\\+[0-9]+ .*test\\.cpp\n"));
+  tty.send(".edit nope\r");
+  EXPECT_THAT(tty.idle(), HasSubstr("nope"));
+
+  tty.send(".continue\r");
+  tty.expect("continuing program");
+  EXPECT_EQ(program.wait(), 0);
+}
 
 TEST(ReplTty, CompletesEditsAndEvaluates) {
   const TempDir tmp;

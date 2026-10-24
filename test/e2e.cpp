@@ -10,6 +10,7 @@
 #include <llvm/Support/JSON.h>
 
 #include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -27,6 +28,7 @@ using inspector::test::TempDir;
 using testing::Contains;
 using testing::Each;
 using testing::ElementsAre;
+using testing::EndsWith;
 using testing::HasSubstr;
 using testing::Not;
 using testing::Pair;
@@ -130,6 +132,29 @@ auto complete(const std::string &text, std::string *prefix = nullptr)
     }
   }
   return names;
+}
+
+struct Located {
+  std::string file;
+  std::string text; // the source line, or the error
+};
+
+auto locate(const std::string &name) -> Located {
+  const auto reply =
+      stopped()->conn.request(llvm::json::Object{{"locate", name}});
+  if (!reply) {
+    ADD_FAILURE() << "program hung up on " << name;
+    return {};
+  }
+  if (reply->getBoolean("error").value_or(false)) {
+    return {"", reply->getString("value").value_or("").str()};
+  }
+  Located found{reply->getString("file").value_or("").str(), ""};
+  std::ifstream source(found.file);
+  for (int64_t line = reply->getInteger("line").value_or(0); line > 0; --line) {
+    std::getline(source, found.text);
+  }
+  return found;
 }
 
 // Only test/test.cpp declares these; the build-system examples do not.
@@ -318,6 +343,31 @@ TEST_F(Session, ShowsValuesBriefly) {
   EXPECT_THAT(got.at(1), Pair(R"("Hello world!")", false));
   EXPECT_TRUE(got.at(2).second);
   EXPECT_THAT(got.at(3), Pair("true", false));
+}
+
+TEST_F(Session, LocatesDefinitions) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  const Located hidden = locate("Hidden");
+  EXPECT_THAT(hidden.file, EndsWith("test.cpp"));
+  EXPECT_THAT(hidden.text, HasSubstr("class Hidden"));
+  EXPECT_THAT(locate("Bits::whole").text, HasSubstr("int whole"));
+}
+
+TEST_F(Session, LocatesDeclarations) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  // Declared here, defined in another file of the program.
+  EXPECT_THAT(locate("::answer").text, HasSubstr("int answer()"));
+  EXPECT_THAT(locate("std::string").file, Not(EndsWith("test.cpp")));
+}
+
+TEST_F(Session, ReportsUnknownNames) {
+  const Located missing = locate("nope::nothing");
+  EXPECT_EQ(missing.file, "");
+  EXPECT_THAT(missing.text, HasSubstr("nope::nothing"));
 }
 
 TEST_F(Session, CallsFunctionsOfTheProgram) {

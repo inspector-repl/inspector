@@ -7,12 +7,19 @@
 #include <clang/Frontend/CompilerInvocation.h>
 #include <clang/Serialization/PCHContainerOperations.h>
 #include <llvm/ADT/IntrusiveRefCntPtr.h>
+#include <llvm/ADT/StringRef.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace inspector {
+
+struct Location {
+  std::string file;
+  unsigned line;
+};
 
 struct Completions {
   std::vector<std::string> names;
@@ -38,6 +45,8 @@ class Completer {
   std::shared_ptr<clang::PCHContainerOperations> pch;
   std::unique_ptr<clang::ASTUnit> unit; // parsed lazily; caches the preamble
 
+  auto load() -> bool;
+
 public:
   Completer(std::string path, unsigned line,
             const clang::CompilerInvocation &interpreter);
@@ -50,6 +59,10 @@ public:
   // declarations should be visible); `text` ends at the cursor.
   auto complete(const std::string &before, const std::string &text)
       -> Completions;
+
+  // Where `name` (optionally qualified, e.g. `ns::Class::member`) is defined,
+  // or declared if this file only declares it.
+  auto locate(llvm::StringRef name) -> std::optional<Location>;
 };
 
 } // namespace inspector
