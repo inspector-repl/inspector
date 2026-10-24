@@ -150,6 +150,9 @@ auto Prompt::getRequest() -> Request {
   if (const auto text = object->getString("complete")) {
     return {Request::Kind::Complete, text->str(), {}};
   }
+  if (object->getBoolean("prepare").value_or(false)) {
+    return {Request::Kind::Prepare, "", {}};
+  }
   if (const auto text = object->getString("ls")) {
     return {Request::Kind::Ls, text->str(), {}};
   }

@@ -11,6 +11,7 @@
 #include <clang/AST/Type.h>
 #include <clang/Basic/DiagnosticOptions.h>
 #include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/CompilerInvocation.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Interpreter/IncrementalExecutor.h>
 #include <clang/Interpreter/Interpreter.h>
@@ -515,6 +516,59 @@ struct InterpreterOwner {
   }
 };
 
+// Parsing the file takes seconds in large projects. Only interactive clients
+// ask to prepare it in the background, scripted ones never complete.
+class LazyCompleter {
+  std::string path;
+  unsigned line;
+  const clang::CompilerInvocation *invocation;
+  std::unique_ptr<Completer> completer;
+  // Declared after `completer`, so it is joined before that is destroyed.
+  std::jthread preparing;
+
+  void make() {
+    if (!completer) {
+      completer = std::make_unique<Completer>(path, line, *invocation);
+    }
+  }
+
+public:
+  LazyCompleter(std::string path, unsigned line,
+                const clang::CompilerInvocation &invocation)
+      : path(std::move(path)), line(line), invocation(&invocation) {}
+
+  void prepare() {
+    if (!completer) {
+      make();
+      preparing = std::jthread([this]() -> void { completer->prepare(); });
+    }
+  }
+
+  // The completer, once its background parse finished.
+  auto get() -> Completer & {
+    make();
+    finish();
+    return *completer;
+  }
+
+  void finish() {
+    if (preparing.joinable()) {
+      preparing.join();
+    }
+  }
+};
+
+auto briefValues(Session &session, const std::vector<std::string> &codes)
+    -> llvm::json::Object {
+  llvm::json::Array values;
+  for (const auto &code : codes) {
+    const Reply value = session.brief(code);
+    values.push_back(
+        llvm::json::Object{{"value", value.value}, {"error", value.error}});
+  }
+  return llvm::json::Object{{"values", std::move(values)}};
+}
+
 void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
              const char *declare, const std::string &context,
              const char *const *includes) {
@@ -556,38 +610,33 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
 
   Session session(*owner.interp, jitErrors);
   prompt.sendReady(session.setup(declare, context));
-  // Built on the first completion request: the parse costs a few hundred ms.
-  std::unique_ptr<Completer> completer;
+  LazyCompleter completer(path, lineNumber,
+                          owner.interp->getCompilerInstance()->getInvocation());
   while (true) {
     const Request request = prompt.getRequest();
-    if (request.kind == Request::Kind::Complete) {
-      if (!completer) {
-        completer = std::make_unique<Completer>(
-            path, lineNumber,
-            owner.interp->getCompilerInstance()->getInvocation());
-      }
+    switch (request.kind) {
+    case Request::Kind::Prepare:
+      completer.prepare();
+      continue;
+    case Request::Kind::Complete: {
       const Completions found =
-          completer->complete(session.history(), request.text);
+          completer.get().complete(session.history(), request.text);
       prompt.sendCompletions(found.names, found.prefix);
       continue;
     }
-    if (request.kind == Request::Kind::Ls) {
+    case Request::Kind::Ls:
       prompt.sendObject(session.ls(request.text));
       continue;
-    }
-    if (request.kind == Request::Kind::Values) {
-      llvm::json::Array values;
-      for (const auto &code : request.list) {
-        const Reply value = session.brief(code);
-        values.push_back(
-            llvm::json::Object{{"value", value.value}, {"error", value.error}});
-      }
-      prompt.sendObject(llvm::json::Object{{"values", std::move(values)}});
+    case Request::Kind::Values:
+      prompt.sendObject(briefValues(session, request.list));
       continue;
+    case Request::Kind::Input:
+      break;
     }
     if (request.text == ".quit" || request.text == ".abort") {
       prompt.sendResult({"", false});
       if (request.text == ".abort") {
+        completer.finish();
         std::exit(1); // NOLINT(concurrency-mt-unsafe): user asked to abort
       }
       return;

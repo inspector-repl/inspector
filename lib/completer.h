@@ -42,6 +42,10 @@ public:
   Completer(std::string path, unsigned line,
             const clang::CompilerInvocation &interpreter);
 
+  // Parses the file, the slow part of the first complete(). Doesn't touch
+  // the interpreter, so it may run on another thread.
+  void prepare();
+
   // `before` is the REPL input preceding `text` (earlier statements whose
   // declarations should be visible); `text` ends at the cursor.
   auto complete(const std::string &before, const std::string &text)

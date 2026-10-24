@@ -155,20 +155,22 @@ Completer::Completer(std::string path, unsigned line,
   preprocessor.addMacroDef("INSPECTOR=<inspector/dummy.h>");
 }
 
+void Completer::prepare() {
+  if (!found || unit) {
+    return;
+  }
+  // Precompiling the preamble (the includes) once makes later requests
+  // re-parse only the rest of the file.
+  unit = clang::ASTUnit::LoadFromCompilerInvocation(
+      invocation, pch, diagOpts, diags, files, /*OnlyLocalDecls=*/false,
+      clang::CaptureDiagsKind::None, /*PrecompilePreambleAfterNParses=*/1);
+}
+
 auto Completer::complete(const std::string &before, const std::string &text)
     -> Completions {
-  if (!found) {
-    return {};
-  }
+  prepare();
   if (!unit) {
-    // Precompiling the preamble (the includes) once makes later requests
-    // re-parse only the rest of the file.
-    unit = clang::ASTUnit::LoadFromCompilerInvocation(
-        invocation, pch, diagOpts, diags, files, /*OnlyLocalDecls=*/false,
-        clang::CaptureDiagsKind::None, /*PrecompilePreambleAfterNParses=*/1);
-    if (!unit) {
-      return {};
-    }
+    return {};
   }
   const std::string atBreakpoint = before.empty() ? text : before + "\n" + text;
   const auto lineOffset = static_cast<unsigned>(

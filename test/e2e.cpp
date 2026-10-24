@@ -154,6 +154,15 @@ TEST_F(Session, CapturesLocals) {
   EXPECT_EQ(stopped()->ready.getBoolean("error"), false);
 }
 
+// The interactive client asks for completion to be prepared in the
+// background. That has no reply, input and completion keep working.
+TEST_F(Session, PreparesCompletionWithoutReply) {
+  ASSERT_TRUE(stopped()->conn.send(llvm::json::Object{{"prepare", true}}));
+  EXPECT_THAT(ask("a + 1"), HasSubstr("2"));
+  EXPECT_THAT(complete("b.si"), Contains("size"));
+  EXPECT_THAT(ask("a + 2"), HasSubstr("3"));
+}
+
 TEST_F(Session, EvaluatesExpressions) {
   EXPECT_THAT(ask("a + 41"), HasSubstr("42"));
   EXPECT_THAT(ask("b.size()"), HasSubstr("12"));
