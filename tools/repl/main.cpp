@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <filesystem>
@@ -277,7 +278,21 @@ class Breakpoint {
   auto complete(const std::string &input, int &contextLen)
       -> Replxx::completions_t {
     Replxx::completions_t out;
-    const auto reply = conn->request(llvm::json::Object{{"complete", input}});
+    if (!conn->send(llvm::json::Object{{"complete", input}})) {
+      return out;
+    }
+    // The first request may wait for the program to parse the file.
+    constexpr std::chrono::milliseconds patience{150};
+    const bool slow = !conn->wait(patience);
+    if (slow) {
+      std::cout << "\0337" << gray << " (parsing "
+                << std::filesystem::path(file).filename().string() << "…)"
+                << reset << std::flush;
+    }
+    const auto reply = conn->receive();
+    if (slow) {
+      std::cout << "\0338\033[K" << std::flush;
+    }
     if (!reply) {
       return out;
     }
@@ -382,6 +397,8 @@ public:
     }
     show(*ready);
     std::cout << "Type .help for commands.\n";
+    // Completion is likely wanted here, unlike in scripts.
+    (void)conn->send(llvm::json::Object{{"prepare", true}});
     configure();
     const std::string history = historyPath().string();
     const std::string prompt = std::filesystem::path(file).filename().string() +

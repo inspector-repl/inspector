@@ -18,10 +18,11 @@ struct Reply {
   bool error;
 };
 
-// A message from the REPL: a statement to run, text to complete, an
-// expression to list the members of, or expressions to show briefly.
+// A message from the REPL: a statement to run, text to complete, a hint
+// that completion will be wanted (no reply), an expression to list the
+// members of, or expressions to show briefly.
 struct Request {
-  enum class Kind : std::uint8_t { Input, Complete, Ls, Values };
+  enum class Kind : std::uint8_t { Input, Complete, Prepare, Ls, Values };
   Kind kind;
   std::string text;
   std::vector<std::string> list;
