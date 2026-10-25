@@ -176,6 +176,8 @@ class Session {
     }
     // JIT link errors (e.g. missing symbols) don't go through diagnostics.
     const std::string cause = jitErrors.take();
+    // Parse errors are only "Parsing failed.", the diagnostics say why.
+    linkFailed = !cause.empty() || err.isA<llvm::orc::FailedToMaterialize>();
     // Undo leaves the initializer queued, a failing runCtors() drains it.
     if (err.isA<llvm::orc::FailedToMaterialize>()) {
       llvm::consumeError(interp.Undo());
@@ -186,7 +188,6 @@ class Session {
       }
       jitErrors.take();
     }
-    linkFailed = true;
     if (cause.empty()) {
       lastError = llvm::toString(std::move(err));
     } else {

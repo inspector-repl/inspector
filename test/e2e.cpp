@@ -168,6 +168,8 @@ TEST_F(Session, KeepsDeclarations) {
 
 TEST_F(Session, ReportsErrors) {
   EXPECT_THAT(ask("undefined_name + 1"), HasSubstr("undeclared identifier"));
+  // '[' takes the lambda path, which must not hide clang's diagnostic.
+  EXPECT_THAT(ask("(&b)[0].size"), HasSubstr("must be called"));
 }
 
 TEST_F(Session, KeepsTemporariesAlive) {
