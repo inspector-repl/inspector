@@ -122,6 +122,10 @@ void Prompt::sendCompletions(const std::vector<std::string> &names,
                                  {"prefix", prefix}}));
 }
 
+void Prompt::sendObject(const llvm::json::Object &object) const {
+  send(toJson(llvm::json::Object(object)));
+}
+
 auto Prompt::getRequest() -> Request {
   constexpr size_t chunkSize = 4096;
   size_t end = 0;
@@ -141,10 +145,21 @@ auto Prompt::getRequest() -> Request {
   }
   const auto *object = message->getAsObject();
   if (object == nullptr) {
-    return {Request::Kind::Input, ""};
+    return {Request::Kind::Input, "", {}};
   }
   if (const auto text = object->getString("complete")) {
-    return {Request::Kind::Complete, text->str()};
+    return {Request::Kind::Complete, text->str(), {}};
   }
-  return {Request::Kind::Input, object->getString("input").value_or("").str()};
+  if (const auto text = object->getString("ls")) {
+    return {Request::Kind::Ls, text->str(), {}};
+  }
+  if (const auto *exprs = object->getArray("values")) {
+    Request request{Request::Kind::Values, "", {}};
+    for (const auto &expr : *exprs) {
+      request.list.push_back(expr.getAsString().value_or("").str());
+    }
+    return request;
+  }
+  return {
+      Request::Kind::Input, object->getString("input").value_or("").str(), {}};
 }

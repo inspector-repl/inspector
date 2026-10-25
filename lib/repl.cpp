@@ -2,8 +2,12 @@
 #include "compat.h"
 #include "completer.h"
 #include "inspector/prompt.h"
+#include "members.h"
 
-#include <clang/AST/PrettyPrinter.h>
+#include <clang/AST/ASTContext.h>
+#include <clang/AST/Decl.h>
+#include <clang/AST/DeclCXX.h>
+#include <clang/AST/DeclarationName.h>
 #include <clang/AST/Type.h>
 #include <clang/Basic/DiagnosticOptions.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -21,11 +25,14 @@
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
 #include <llvm/ExecutionEngine/Orc/MemoryMapper.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Support/Error.h>
+#include <llvm/Support/JSON.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Host.h>
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstddef>
@@ -94,17 +101,18 @@ public:
 };
 
 auto typeName(const clang::Value &value) -> std::string {
-  clang::PrintingPolicy policy(value.getASTContext().getLangOpts());
-  policy.SuppressDefaultTemplateArgs = true;
-  policy.FullyQualifiedName = true;
-  // Canonical drops the generated inspector_repl::type<> wrapper.
-  std::string name = value.getType().getCanonicalType().getAsString(policy);
-  const std::string longString = "std::basic_string<char>";
-  size_t pos = 0;
-  while ((pos = name.find(longString)) != std::string::npos) {
-    name.replace(pos, longString.size(), "std::string");
+  return spell(value.getType(), value.getASTContext());
+}
+
+// One line of at most `limit` bytes, for listings.
+auto oneLine(std::string text) -> std::string {
+  constexpr size_t limit = 100;
+  std::ranges::replace(text, '\n', ' ');
+  if (text.size() > limit) {
+    text.resize(limit);
+    text += "\u2026";
   }
-  return name;
+  return text;
 }
 
 auto isRecord(const clang::Value &value) -> bool {
@@ -193,6 +201,12 @@ class Session {
     return msg.empty() ? lastError : msg;
   }
 
+  auto firstLineOfFailure() -> Reply {
+    const std::string error = failure();
+    diags.clear();
+    return {oneLine(error.substr(0, error.find('\n'))), true};
+  }
+
   auto fresh(const char *prefix) -> std::string {
     return prefix + std::to_string(counter++);
   }
@@ -227,6 +241,17 @@ class Session {
       out.pop_back();
     }
     return {out, false};
+  }
+
+  // The type a valueType() alias names, null if there is none.
+  auto aliasedType(const std::string &alias) -> clang::QualType {
+    auto &context = interp.getCompilerInstance()->getASTContext();
+    const auto found = context.getTranslationUnitDecl()->lookup(
+        clang::DeclarationName(&context.Idents.get(alias)));
+    const auto *decl =
+        found.empty() ? nullptr
+                      : llvm::dyn_cast<clang::TypedefNameDecl>(found.front());
+    return decl == nullptr ? clang::QualType() : decl->getUnderlyingType();
   }
 
 public:
@@ -311,6 +336,101 @@ public:
     }
     // Warnings on success (e.g. [[nodiscard]]) are noise in a REPL.
     return {succeeded ? "" : failure(), !succeeded};
+  }
+
+  // An lvalue for `text` that code in the JIT can assign to.
+  static auto slot(std::string &text) -> std::string {
+    return "(*(std::string *)" + hexAddress(&text) + ")";
+  }
+
+  // The value of `code` on one line, without its type.
+  auto brief(const std::string &code) -> Reply {
+    std::string text;
+    diags.clear();
+    // A block: later inputs can't see names declared here, but neither
+    // can they see stale copies of internal-linkage variables.
+    if (!run("{ inspector_repl::print(" + slot(text) + ", (" + code +
+             ")); }")) {
+      return firstLineOfFailure();
+    }
+    return {oneLine(text), false};
+  }
+
+  // Fields with values and methods of the class `expr` evaluates to (or
+  // points to), for `.ls`.
+  auto ls(const std::string &expr) -> llvm::json::Object {
+    const auto error = [](const std::string &message) -> llvm::json::Object {
+      return llvm::json::Object{{"value", message}, {"error", true}};
+    };
+    const std::string alias = valueType(expr);
+    clang::QualType listed =
+        alias.empty() ? clang::QualType() : aliasedType(alias);
+    if (listed.isNull()) {
+      diags.clear();
+      run("(void)(" + expr + ");");
+      const std::string why = failure();
+      return error(why.empty() ? expr + " has no value" : why);
+    }
+    listed = listed.getNonReferenceType();
+    std::string object = "__inspector_o";
+    if (const auto *pointer = listed->getAs<clang::PointerType>()) {
+      listed = pointer->getPointeeType();
+      object = "(*__inspector_o)";
+    }
+    const auto *record = listed->getAsCXXRecordDecl();
+    const auto &context = interp.getCompilerInstance()->getASTContext();
+    if (record == nullptr || !record->hasDefinition()) {
+      return error(spell(listed, context) + " is not a class");
+    }
+    std::vector<ClassMembers> members = listMembers(*record);
+    std::vector<std::string> prints; // one statement per field
+    for (const ClassMembers &cls : members) {
+      for (const auto &field : cls.fields) {
+        prints.push_back(object + "." + field.first);
+      }
+    }
+    std::vector<Reply> values(prints.size(), Reply{"", false});
+    const auto printing = [&](size_t index) -> std::string {
+      return "inspector_repl::print(" + slot(values.at(index).value) + ", " +
+             prints.at(index) + ");\n";
+    };
+    const std::string bind = "{ auto &&__inspector_o = (" + expr + ");\n";
+    // One evaluation of `expr` for all fields. Should a field not print,
+    // each is retried alone so only that one is missing.
+    std::string block = bind;
+    for (size_t i = 0; i < prints.size(); ++i) {
+      block += printing(i);
+    }
+    diags.clear();
+    if (!run(block + "}")) {
+      for (size_t i = 0; i < prints.size(); ++i) {
+        diags.clear();
+        if (!run(bind + printing(i) + "}")) {
+          values.at(i) = firstLineOfFailure();
+        }
+      }
+    }
+    llvm::json::Array classes;
+    auto value = values.begin();
+    for (ClassMembers &cls : members) {
+      llvm::json::Array fields;
+      for (auto &[name, type] : cls.fields) {
+        fields.push_back(llvm::json::Object{{"name", std::move(name)},
+                                            {"type", std::move(type)},
+                                            {"value", oneLine(value->value)},
+                                            {"error", value->error}});
+        ++value;
+      }
+      llvm::json::Array methods;
+      for (auto &method : cls.methods) {
+        methods.emplace_back(std::move(method));
+      }
+      classes.push_back(llvm::json::Object{{"name", std::move(cls.name)},
+                                           {"fields", std::move(fields)},
+                                           {"methods", std::move(methods)}});
+    }
+    return llvm::json::Object{{"type", spell(listed, context)},
+                              {"classes", std::move(classes)}};
   }
 
   [[nodiscard]] auto history() const -> const std::string & {
@@ -448,6 +568,20 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
       const Completions found =
           completer->complete(session.history(), request.text);
       prompt.sendCompletions(found.names, found.prefix);
+      continue;
+    }
+    if (request.kind == Request::Kind::Ls) {
+      prompt.sendObject(session.ls(request.text));
+      continue;
+    }
+    if (request.kind == Request::Kind::Values) {
+      llvm::json::Array values;
+      for (const auto &code : request.list) {
+        const Reply value = session.brief(code);
+        values.push_back(
+            llvm::json::Object{{"value", value.value}, {"error", value.error}});
+      }
+      prompt.sendObject(llvm::json::Object{{"values", std::move(values)}});
       continue;
     }
     if (request.text == ".quit" || request.text == ".abort") {

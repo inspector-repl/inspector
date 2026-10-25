@@ -114,6 +114,7 @@ template <typename T> void show(std::ostream &out, const T &value) {
 
 template <typename T> void print(std::string &result, const T &value) {
   std::ostringstream out;
+  out << std::boolalpha;
   show(out, value);
   result = out.str();
 }

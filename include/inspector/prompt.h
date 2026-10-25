@@ -6,6 +6,11 @@
 #include <string>
 #include <vector>
 
+// Installed with the other headers, so LLVM stays out of it.
+namespace llvm::json {
+class Object;
+} // namespace llvm::json
+
 namespace inspector {
 
 struct Reply {
@@ -13,11 +18,13 @@ struct Reply {
   bool error;
 };
 
-// A message from the REPL: a statement to run, or text to complete.
+// A message from the REPL: a statement to run, text to complete, an
+// expression to list the members of, or expressions to show briefly.
 struct Request {
-  enum class Kind : std::uint8_t { Input, Complete };
+  enum class Kind : std::uint8_t { Input, Complete, Ls, Values };
   Kind kind;
   std::string text;
+  std::vector<std::string> list;
 };
 
 struct Disconnected : std::runtime_error {
@@ -48,6 +55,7 @@ public:
   void sendResult(const Reply &reply) const;
   void sendCompletions(const std::vector<std::string> &names,
                        const std::string &prefix) const;
+  void sendObject(const llvm::json::Object &object) const;
   // Throws Disconnected when the REPL hangs up.
   auto getRequest() -> Request;
 };

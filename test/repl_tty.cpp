@@ -14,6 +14,7 @@
 #include <iostream>
 #include <regex>
 #include <signal.h> // NOLINT(modernize-deprecated-headers): kill is POSIX
+#include <sstream>
 #include <string>
 #include <sys/poll.h>
 #include <sys/types.h>
@@ -27,6 +28,7 @@
 
 using inspector::test::Child;
 using inspector::test::TempDir;
+using testing::ContainsRegex;
 using testing::HasSubstr;
 
 namespace {
@@ -131,6 +133,54 @@ TEST(ReplTty, CompletesEditsAndEvaluates) {
   EXPECT_THAT(tty.expect("[4]"), HasSubstr("(int) 4"));
   tty.send("\x10\x10\r");
   EXPECT_THAT(tty.expect("[5]"), HasSubstr("(int) 3"));
+
+  tty.send(".continue\r");
+  tty.expect("continuing program");
+  EXPECT_EQ(program.wait(), 0);
+}
+
+TEST(ReplTty, ListsLocalsWithValues) {
+  const TempDir tmp;
+  Tty tty(paths().at(0));
+  tty.expect("Waiting");
+  const Child program(paths().at(1));
+  tty.expect("[0]");
+
+  // Columns: name, type, value.
+  tty.send(".locals\r");
+  const std::string locals = tty.expect("[1]");
+  EXPECT_THAT(locals, ContainsRegex("\n  a +int += 1\r"));
+  EXPECT_THAT(locals, ContainsRegex("\n  b +[^ ]+ += \"Hello world!\""));
+
+  tty.send(".continue\r");
+  tty.expect("continuing program");
+  EXPECT_EQ(program.wait(), 0);
+}
+
+TEST(ReplTty, ListsMembers) {
+  const TempDir tmp;
+  Tty tty(paths().at(0));
+  tty.expect("Waiting");
+  const Child program(paths().at(1));
+  tty.expect("[0]");
+
+  // Each class with its fields and methods, the class first, then bases.
+  tty.send(".ls hidden\r");
+  const std::string listed = tty.expect("[1]");
+  EXPECT_THAT(listed, ContainsRegex("Hidden\r\n  secret +int += 11\r"));
+  EXPECT_THAT(listed, ContainsRegex("methods: peek\r\n[^\n]*Base\r"));
+
+  // Long method lists wrap at the terminal width (80 without a size).
+  tty.send(".ls b\r");
+  const std::string library = tty.expect("[2]");
+  tty.send(".ls a\r");
+  const std::string wrapped = library + tty.expect("[3]");
+  std::istringstream lines(wrapped);
+  for (std::string line; std::getline(lines, line);) {
+    EXPECT_LE(line.size(), 81U) << line; // with the '\r'
+  }
+
+  EXPECT_THAT(wrapped, HasSubstr("int is not a class"));
 
   tty.send(".continue\r");
   tty.expect("continuing program");
