@@ -116,9 +116,13 @@ auto ls(const std::string &expr) -> std::vector<Listed> {
   return out;
 }
 
-auto complete(const std::string &text) -> std::vector<std::string> {
+auto complete(const std::string &text, std::string *prefix = nullptr)
+    -> std::vector<std::string> {
   const auto reply =
       stopped()->conn.request(llvm::json::Object{{"complete", text}});
+  if (prefix != nullptr) {
+    *prefix = reply ? reply->getString("prefix").value_or("").str() : "";
+  }
   std::vector<std::string> names;
   if (const auto *list = reply ? reply->getArray("completions") : nullptr) {
     for (const auto &name : *list) {
@@ -182,6 +186,20 @@ TEST_F(Session, CompletesMembersOfLibraryTypes) {
   EXPECT_THAT(complete("b.si"), Contains("size"));
   EXPECT_THAT(complete("c + b.si"), Contains("size"));
   EXPECT_THAT(complete("b."), Each(Not(StartsWith("_"))));
+}
+
+// `.` on a pointer completes to `->`, replacing the dot.
+TEST_F(Session, CompletesMembersThroughPointers) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  std::string prefix;
+  EXPECT_THAT(complete("pointer.va", &prefix), Contains("->value"));
+  EXPECT_EQ(prefix, ".va");
+  EXPECT_THAT(complete("pointer->va", &prefix), Contains("value"));
+  EXPECT_EQ(prefix, "va");
+  EXPECT_THAT(complete("ptr.ge", &prefix), Contains("get"));
+  EXPECT_EQ(prefix, "ge");
 }
 
 TEST_F(Session, SpellsScopedTypes) {
