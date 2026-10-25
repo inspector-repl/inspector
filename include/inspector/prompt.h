@@ -20,9 +20,16 @@ struct Reply {
 
 // A message from the REPL: a statement to run, text to complete, a hint
 // that completion will be wanted (no reply), an expression to list the
-// members of, or expressions to show briefly.
+// members of, expressions to show briefly, or a name to locate.
 struct Request {
-  enum class Kind : std::uint8_t { Input, Complete, Prepare, Ls, Values };
+  enum class Kind : std::uint8_t {
+    Input,
+    Complete,
+    Prepare,
+    Ls,
+    Values,
+    Locate
+  };
   Kind kind;
   std::string text;
   std::vector<std::string> list;

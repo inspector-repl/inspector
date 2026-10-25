@@ -624,6 +624,14 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
       prompt.sendCompletions(found.names, found.prefix);
       continue;
     }
+    case Request::Kind::Locate:
+      if (const auto found = completer.get().locate(request.text)) {
+        prompt.sendObject(
+            llvm::json::Object{{"file", found->file}, {"line", found->line}});
+      } else {
+        prompt.sendResult({"no declaration of " + request.text, true});
+      }
+      continue;
     case Request::Kind::Ls:
       prompt.sendObject(session.ls(request.text));
       continue;
