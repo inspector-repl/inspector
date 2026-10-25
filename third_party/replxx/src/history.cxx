@@ -133,12 +133,18 @@ bool History::save( std::string const& filename, bool sync_ ) {
 		_entries = entries;
 		reset_iters();
 	}
+	// Lines from this session go after the re-read file, so for equal
+	// (millisecond) timestamps the stable sort and remove_duplicates() keep
+	// them in the order they were entered.
+	entries_t session;
+	session.swap( _entries );
 	/* scope for ifstream object auto-close */ {
 		ifstream histFile( filename );
 		if ( histFile ) {
 			do_load( histFile );
 		}
 	}
+	_entries.splice( _entries.end(), session );
 	sort();
 	remove_duplicates();
 	trim_to_max_size();
