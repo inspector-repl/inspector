@@ -95,15 +95,15 @@ in another. Pick whichever integration fits your build:
 ### In the REPL
 
 ```
-[0] .locals
+main.cpp:12> .locals
   v     std::vector<int>
   name  std::string
-[1] v.push_back(4)
-[2] v
+main.cpp:12> v.push_back(4)
+main.cpp:12> v
 (std::vector<int> &) {1, 2, 3, 4}
-[3] name + "!"
+main.cpp:12> name + "!"
 (std::string &) "inspector!"
-[4] undefined + 1
+main.cpp:12> undefined + 1
 error: use of undeclared identifier 'undefined'
 ```
 
