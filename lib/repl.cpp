@@ -405,8 +405,9 @@ void runRepl(Prompt &prompt, const char *path, unsigned lineNumber,
 
   clang::IncrementalCompilerBuilder builder;
   builder.SetTargetTriple(llvm::sys::getProcessTriple());
-  std::vector<const char *> args = {"-resource-dir",
-                                    INSPECTOR_CLANG_RESOURCE_DIR};
+  // A debugger has to show private state, as gdb does.
+  std::vector<const char *> args = {
+      "-resource-dir", INSPECTOR_CLANG_RESOURCE_DIR, "-fno-access-control"};
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic): C API
   for (const char *const *arg = includes; *arg != nullptr; ++arg) {
     args.push_back(*arg);

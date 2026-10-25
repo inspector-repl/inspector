@@ -158,6 +158,13 @@ TEST_F(Session, CapturesTrickyLocals) {
   EXPECT_THAT(ask("whole"), HasSubstr("10"));
 }
 
+TEST_F(Session, ReadsPrivateMembers) {
+  if (!hasTestLocals()) {
+    GTEST_SKIP() << "program is not test/test.cpp";
+  }
+  EXPECT_THAT(ask("hidden.secret"), HasSubstr("(int) 11"));
+}
+
 TEST_F(Session, CallsFunctionsOfTheProgram) {
   if (!hasTestLocals()) {
     GTEST_SKIP() << "program is not test/test.cpp";
